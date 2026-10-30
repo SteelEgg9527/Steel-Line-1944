@@ -2396,6 +2396,9 @@
     var d = U.len(dx, dy);
     if (d < 0.001) return;
     var speed = u.def.speed * T.speedAt(u.x, u.y, u.type);
+    if (u.type === 'engineer_vehicle' && u.engineerMode) {
+      speed *= (SL.ENGINEER.modeSpeedMul || 0.8);
+    }
     if (u.engaging) speed *= 0.55;
     if (u.sprinting) speed *= CB.sprintMul;
     if (u.order && u.order.speedCap > 0) speed = Math.min(speed, u.order.speedCap);
@@ -2428,6 +2431,9 @@
     if (d < 0.001) return;
     var mul = T.speedAt(u.x, u.y, u.type);
     var speed = u.def.speed * mul;
+    if (u.type === 'engineer_vehicle' && u.engineerMode) {
+      speed *= (SL.ENGINEER.modeSpeedMul || 0.8);
+    }
     if (u.engaging) speed *= 0.55;
     if (u.sprinting) speed *= CB.sprintMul;
     if (u.order && u.order.speedCap > 0) speed = Math.min(speed, u.order.speedCap);

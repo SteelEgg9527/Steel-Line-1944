@@ -255,7 +255,7 @@
       armor: 1,
       vision: 240,
       range: 0,
-      speed: 10,
+      speed: 12,
       radius: 10,
       canSprint: false,
       weapon: {
@@ -614,6 +614,7 @@
     maxValue: 200,
     refillRate: 30,
     refillAmmoCost: 1,
+    modeSpeedMul: 0.8,
     layGap: { mine_ap: 18, mine_at: 18, wire: 28, hedgehog: 28 },
     cost: { mine_ap: 8, mine_at: 14, wire: 12, hedgehog: 12 },
     connectRange: 52,
