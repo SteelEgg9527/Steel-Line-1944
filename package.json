@@ -1,0 +1,15 @@
+{
+  "name": "steel-line-1944",
+  "version": "1.0.0",
+  "description": "Steel Line 1944 - Western Europe Theatre of Operations",
+  "main": "js/main.js",
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": ["game", "ww2", "strategy"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@vercel/analytics": "^1.4.1"
+  }
+}
