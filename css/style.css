@@ -155,6 +155,12 @@ html, body {
 .eng-modes { display: flex; flex-wrap: wrap; gap: 4px; }
 .eng-mode { font-size: 9px !important; padding: 3px 5px !important; }
 .eng-mode.on { border-color: #d8b25e; color: #f5d98e; background: rgba(120,92,38,0.35); }
+.engineer-row { margin-top: 7px; padding-top: 6px; border-top: 1px solid rgba(200,180,120,0.18); }
+.eng-head { display: flex; align-items: center; justify-content: space-between; color: #d9cfb0; font: 600 10px var(--font-ui, "Noto Sans SC", "Microsoft YaHei", sans-serif); margin-bottom: 4px; }
+.eng-head b { color: #e8c47a; font: 700 10px var(--font-mono, Consolas, monospace); }
+.eng-modes { display: flex; flex-wrap: wrap; gap: 4px; }
+.eng-mode { font-size: 9px !important; padding: 3px 5px !important; }
+.eng-mode.on { border-color: #d8b25e; color: #f5d98e; background: rgba(120,92,38,0.35); }
 .dh-main { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 .dh-row { display: flex; align-items: center; gap: 14px; color: #cfc5a7; font: 600 9.5px var(--font-ui, "Noto Sans SC", "Microsoft YaHei", sans-serif); }
 .dh-row #dh-target { color: #e4cd85; }

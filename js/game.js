@@ -149,6 +149,9 @@
     // 初始卡包：给玩家两张起手卡（单位包/装备包会立刻开包）
     this.drawCard();
     this.drawCard();
+    // 工程车是核心支援单位；固定给一张，避免受随机卡池影响一直抽不到
+    this.drawCard('unit', 'engineer_vehicle');
+    this.log('工程车支援卡已加入卡包', 'order');
     // 地图上先放若干中立落单单位
     for (var ni = 0; ni < SL.NEUTRAL.initial; ni++) this.spawnNeutral();
     this.log('三军混战：蓝 / 红 / 绿 无限重生', 'info');
@@ -220,6 +223,8 @@
     // 只有蓝红两方；没有中立单位和绿色单位
     this.drawCard();
     this.drawCard();
+    this.drawCard('unit', 'engineer_vehicle');
+    this.log('工程车支援卡已加入卡包', 'order');
     this.log('背水一战：守住黄圈 ' + (diff.holdTime === Infinity ? '直至最后' : U.clock(diff.holdTime)), 'order');
   };
 
