@@ -4722,6 +4722,30 @@
     this.updateAIAir();
   };
 
+  Game.prototype.meleeAirGroupSize = function () {
+    var a = SL.AI_AIR;
+    return Math.min(a.maxGroup || 10,
+      (a.groupBase || 2) + Math.floor(this.time / (a.groupTier || 300)));
+  };
+
+  // 两种模式共用：三角编队 + 每架飞机独立随机落点
+  Game.prototype.spawnAirGroup = function (side, sx, sy, tx, ty, radius, count) {
+    for (var gi = 0; gi < count; gi++) {
+      var plane = this.spawnPlane('airstrike', sx, sy, side);
+      var bang = Math.random() * Math.PI * 2;
+      var brad = Math.sqrt(Math.random()) * radius;
+      plane.bombTx = tx + Math.cos(bang) * brad;
+      plane.bombTy = ty + Math.sin(bang) * brad;
+      var row = Math.floor((Math.sqrt(8 * gi + 1) - 1) / 2);
+      var inRow = gi - row * (row + 1) / 2;
+      var lat = (inRow - row / 2) * 32;
+      var back = row * 34;
+      var hd = plane.heading || 0;
+      plane.x -= Math.cos(hd) * back + Math.cos(hd + Math.PI / 2) * lat;
+      plane.y -= Math.sin(hd) * back + Math.sin(hd + Math.PI / 2) * lat;
+    }
+  };
+
   Game.prototype.updateAIAir = function () {
     if (this.mode === 'lastStand') {
       var d = this.defense;
@@ -4734,21 +4758,8 @@
         var crad = Math.sqrt(Math.random()) * this.yellow.r * 0.55;
         var ctx0 = this.yellow.x + Math.cos(cang) * crad;
         var cty0 = this.yellow.y + Math.sin(cang) * crad;
-        for (var gi = 0; gi < count; gi++) {
-          var plane = this.spawnPlane('airstrike', ctx0, cty0, 'red');
-          var bang = Math.random() * Math.PI * 2;
-          var brad = Math.sqrt(Math.random()) * this.yellow.r * 0.9;
-          plane.bombTx = this.yellow.x + Math.cos(bang) * brad;
-          plane.bombTy = this.yellow.y + Math.sin(bang) * brad;
-          // 三角形编队：后排逐渐展开，整体随长机掠过黄圈
-          var row = Math.floor((Math.sqrt(8 * gi + 1) - 1) / 2);
-          var inRow = gi - row * (row + 1) / 2;
-          var lat = (inRow - row / 2) * 32;
-          var back = row * 34;
-          var hd = plane.heading || 0;
-          plane.x -= Math.cos(hd) * back + Math.cos(hd + Math.PI / 2) * lat;
-          plane.y -= Math.sin(hd) * back + Math.sin(hd + Math.PI / 2) * lat;
-        }
+        this.spawnAirGroup('red', ctx0, cty0, this.yellow.x, this.yellow.y,
+          this.yellow.r * 0.9, count);
       }
       return;
     }
@@ -4762,10 +4773,16 @@
       if (t.airTimer > 0) continue;
       t.airTimer = air.minGap + Math.random() * (air.maxGap - air.minGap);
       if (Math.random() > air.chance) continue;
-      if (this.aliveCount(side) === 0 || this.planes.length >= 3) continue;
-      var tx, ty;
+      var count = this.meleeAirGroupSize();
+      if (this.aliveCount(side) === 0 || this.planes.length + count > 30) continue;
+      var gx, gy;
       if (this.yellow && this.yellow.active) {
         tx = this.yellow.x; ty = this.yellow.y;
+        radius = this.yellow.r * 0.9;
+        var cang = Math.random() * Math.PI * 2;
+        var crad = Math.sqrt(Math.random()) * radius * 0.55;
+        gx = tx + Math.cos(cang) * crad;
+        gy = ty + Math.sin(cang) * crad;
       } else {
         var cnt = 0, sx = 0, sy = 0;
         for (var k = 0; k < this.units.length; k++) {
@@ -4775,10 +4792,11 @@
         }
         tx = cnt ? sx / cnt : SL.CONFIG.mapSize / 2;
         ty = cnt ? sy / cnt : SL.CONFIG.mapSize / 2;
+        radius = 180;
+        gx = tx + (Math.random() - 0.5) * 80;
+        gy = ty + (Math.random() - 0.5) * 80;
       }
-      tx += (Math.random() - 0.5) * 80;
-      ty += (Math.random() - 0.5) * 80;
-      this.spawnPlane('airstrike', tx, ty, side);
+      this.spawnAirGroup(side, gx, gy, tx, ty, radius, count);
     }
   };
 

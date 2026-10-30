@@ -748,7 +748,12 @@
     interval: 1.1,           // 对空射击间隔
     damage: 35               // 对敌机单次伤害
   };
-  SL.AI_AIR = { minGap: 20, maxGap: 45, chance: 0.6 };
+  SL.AI_AIR = {
+    minGap: 20, maxGap: 45, chance: 0.6,
+    groupBase: 2,
+    groupTier: 300,
+    maxGroup: 10
+  };
 
   /* 炮火支援：显示圈与落点共用 radius */
   SL.SUPPORT = { radius: 150, duration: 15, shots: 30, dmg: 140, splash: 100 };
