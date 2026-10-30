@@ -34,6 +34,7 @@
   SL.PERF = {
     maxEffects: 280,        // 场上特效上限，超出丢弃最旧特效
     maxDpr: 1.25,           // 画布最大 devicePixelRatio
+    maxRenderPixels: 2600000, // 内部渲染像素上限（约 2.6MP），高分辨率设备自动降采样
     minimapInterval: 0.12   // 小地图刷新间隔（秒）
   };
 

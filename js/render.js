@@ -96,10 +96,18 @@
 
   R.resize = function () {
     if (!canvas) return;
-    dpr = Math.min(window.devicePixelRatio || 1, (SL.PERF && SL.PERF.maxDpr) || 1.25);
-    R.dpr = dpr;
+    var baseDpr = Math.min(window.devicePixelRatio || 1, (SL.PERF && SL.PERF.maxDpr) || 1.25);
     W = canvas.clientWidth || window.innerWidth;
     H = canvas.clientHeight || window.innerHeight;
+    // 高分辨率屏幕不按 CSS 像素无限放大：限制内部渲染像素总数，再用 CSS 拉伸。
+    // 这样 1440p / 4K 不会因为填充率暴涨而掉帧，文字和 UI 仍由 DOM 保持清晰。
+    var budget = (SL.PERF && SL.PERF.maxRenderPixels) || 2600000;
+    var capDpr = Math.sqrt(budget / Math.max(1, W * H));
+    dpr = Math.max(0.5, Math.min(baseDpr, capDpr));
+    R.dpr = dpr;
+    R.cssW = W;
+    R.cssH = H;
+    R.renderPixels = Math.round(W * H * dpr * dpr);
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
     if (overlay) {
