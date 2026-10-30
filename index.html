@@ -4,11 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>钢线 1944 · 1944 西欧战场</title>
+<link rel="icon" type="image/png" href="favicon.png">
 <link rel="stylesheet" href="css/style.css">
-<script>
-  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-</script>
-<script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
 <div id="app">
@@ -18,7 +15,7 @@
   <div id="boot">
     <div class="boot-mark"></div>
     <div class="boot-title">钢线 1944</div>
-    <div class="boot-sub">正在测绘作战区域 · 1 km × 1 km</div>
+    <div class="boot-sub">正在测绘作战区域 · 2 km × 2 km</div>
     <div class="boot-bar"><i></i></div>
   </div>
 
@@ -116,7 +113,7 @@
       <div class="dt-bars">
         <div class="dt-bar"><span>耐久</span><div class="track"><i id="d-hpbar" class="fill hp"></i></div></div>
         <div class="dt-bar" id="d-stamina-row"><span>体力</span><div class="track"><i id="d-stbar" class="fill st"></i></div></div>
-        <div class="dt-bar"><span>弹药</span><div class="track"><i id="d-ambar" class="fill am"></i></div><b id="d-ammo">500</b></div>
+        <div class="dt-bar" id="d-ammo-row"><span>弹药</span><div class="track"><i id="d-ambar" class="fill am"></i></div><b id="d-ammo">500</b></div>
         <div class="dt-bar" id="d-reload-row"><span>装填</span><div class="track"><i id="d-reloadbar" class="fill rl"></i></div><b id="d-reload">100%</b></div>
       </div>
       <div class="dt-stats">
@@ -126,7 +123,7 @@
         <div id="d-state-row" style="display:none"><i>状态</i><b id="d-state">就绪</b></div>
         <div><i>击毁</i><b id="d-kills">0</b></div>
       </div>
-      <div class="fire-mode-row">
+      <div class="fire-mode-row" id="d-fire-row">
         <span>开火模式</span>
         <button id="fire-mode-btn" class="fire-mode-btn" type="button" title="切换：自由开火 / 反击 / 停火">自由开火</button>
       </div>
@@ -140,6 +137,15 @@
         <button id="btn-grenade" class="ability-btn" type="button">投掷/发射</button>
         <button id="btn-sniper-hide" class="ability-btn" type="button">就地隐蔽</button>
         <button id="btn-engineer" class="ability-btn" type="button">构筑工事</button>
+      </div>
+      <div class="engineer-row" id="engineer-row" style="display:none">
+        <div class="eng-head"><span>工程模式</span><b id="eng-value">200 / 200</b></div>
+        <div class="eng-modes">
+          <button class="ability-btn eng-mode" data-eng="mine_ap" type="button">反步兵雷</button>
+          <button class="ability-btn eng-mode" data-eng="mine_at" type="button">反坦克雷</button>
+          <button class="ability-btn eng-mode" data-eng="wire" type="button">铁丝网</button>
+          <button class="ability-btn eng-mode" data-eng="hedgehog" type="button">拒马</button>
+        </div>
       </div>
       <div class="dt-items" id="d-items"></div>
       <div class="dt-items-label">装备栏 <span>武器系统开发中</span></div>
@@ -265,7 +271,7 @@
               <li><span class="chip red"></span>红队 / 绿队 · 初始6单位基础连队</li>
               <li><span class="chip green"></span>AI单位上限：简单14 / 普通20 / 困难26 / 无限32</li>
               <li><span class="chip"></span>升级+1随机增援；全灭后按等级重建，最高不超过难度上限</li>
-              <li><span class="chip"></span>AI步兵出生携带0~6件随机装备；AI不能拾取掉落</li>
+              <li><span class="chip"></span>AI步兵出生携带随机装备：简单最多2件 / 普通最多4件 / 困难最多6件；无限难度15分钟前2件、15~30分钟4件、30分钟后6件；AI不能拾取掉落</li>
             </ul>
           </div>
         </div>
@@ -275,7 +281,8 @@
             <ul class="force" id="battle-rules">
               <li><span class="chip"></span>黄圈累计100,000经验者获胜；无限难度无胜利条件</li>
               <li><span class="chip red"></span>普通50,000/90,000各一位BOSS；困难90,000红绿双BOSS；简单无BOSS</li>
-              <li><span class="chip"></span>隐蔽1秒、幽灵1秒；反坦克炮原地5秒进入隐蔽；G键含手雷/火箭筒</li>
+              <li><span class="chip"></span>隐蔽1秒、幽灵1秒；反坦克炮/指挥车原地5秒进入隐蔽；指挥车持续侦察圈可见普通隐蔽，不可见幽灵；G键含手雷/火箭筒</li>
+        <li><span class="chip"></span>工程车选择一种工程模式后行驶布设：反步兵雷 / 反坦克雷 / 铁丝网 / 拒马；工程值在补给点补充</li>
               <li><span class="chip"></span>占领区提供掩护、持续经验与分数；工事可独立索敌开火</li>
             </ul>
           </div>
@@ -337,10 +344,11 @@
               <li><b>右键</b><span>移动；多单位按最慢单位速度前进；双击 = 步兵急行军</span></li>
               <li><b>右键敌对</b><span>攻击并追击</span></li>
               <li><b>Shift + 右键</b><span>指挥车侦察 / 工兵构筑野战工事 / 狙击小组就地隐蔽 / 火箭炮点射</span></li>
-              <li><b>Shift + 右键 指挥车</b><span>在 600m 内选取一点建立直径 300m 持续侦察区，高地可提高距离；指挥车视野 450m，移动后侦察区失效</span></li>
+              <li><b>Shift + 右键 指挥车</b><span>在 600m 内选取一点建立直径 300m 持续侦察区，高地可提高距离；指挥车视野 450m，移动后侦察区失效；原地 5 秒进入隐蔽，移动/开火解除</span></li>
               <li><b>Shift + 右键 火箭炮</b><span>指定目标点，进入射程后 5 秒内逐发速射 10 发；默认停火，装填 90 秒</span></li>
               <li><b>F3</b><span>显示/隐藏性能面板：FPS、单位数、更新/渲染耗时、特效数与可见单位</span></li>
           <li><b>面板技能按钮</b><span>火力压制 / 侦察 / 投掷/发射 / 就地隐蔽 / 构筑工事：点击后再点地图，等同 Shift + 右键；手雷/火箭筒可切换自动/手动，G 键手动攻击</span></li>
+        <li><b>工程车</b><span>选中工程车后，在详情面板选择反步兵雷 / 反坦克雷 / 铁丝网 / 拒马；再右键移动，车辆沿行驶路线布设。右键点击敌方铁丝网/拒马可拆除</span></li>
               <li><b>左侧部队清单</b><span>点击单位选中并跳转镜头</span></li>
               <li><b>开火模式</b><span>已选单位面板可切换自由开火 / 反击 / 停火</span></li>
               <li><b>底部抽卡</b><span>升级抽卡先排队，点按钮再选，可稍后再选</span></li>
@@ -383,6 +391,7 @@
                 <tr><td>轻型反坦克炮</td><td>160 m</td><td>190 m</td><td>90</td><td>6.5 m/s</td></tr>
 <tr><td>自行火箭炮</td><td>200 m</td><td>700 m</td><td>110</td><td>10 m/s</td></tr>
 <tr><td>指挥车</td><td>450 m</td><td>—</td><td>120</td><td>12 m/s</td></tr>
+<tr><td>工程车</td><td>240 m</td><td>—</td><td>220</td><td>10 m/s</td></tr>
               </tbody>
             </table>
             <p class="tip">火炮/重型火炮有收炮-移动-架设状态，架设完成前不索敌、不开火；中型坦克/重坦带 MG42 并列机枪。所有直接火力越远命中越低，行进中开火命中率减半；火炮 scatter 为极限射程散布。步兵轻武器无法伤害坦克，火箭筒（AP 1.9）与反坦克手雷（AP 1.5）可击穿。防空车对空 600m、20 发弹夹。装甲车为 30mm MK 103 机炮（10m 溅射），没有对空能力。机枪/迫击炮消耗步兵班弹药；机枪打工事内步兵伤害降低 75%。</p>
@@ -391,7 +400,7 @@
               <tbody>
                 <tr><td>机枪（MG42）</td><td>180 m</td><td>使用步兵班弹药</td></tr>
                 <tr><td>迫击炮（8cm）</td><td>300 m</td><td>使用步兵班弹药 · 散布 65m · 溅射 60m · 停止后才开火 · 直击可伤害装甲</td></tr>
-                <tr><td>火箭筒（Panzerschreck）</td><td>250 m</td><td>3 发 · 400 伤害 · 慢速火箭弹 · 独立弹耗</td></tr>
+                <tr><td>火箭筒（Panzerschreck）</td><td>200 m</td><td>3 发 · 400 伤害 · 慢速火箭弹 · 高散布 · 不吃射程加成</td></tr>
                 <tr><td>手榴弹</td><td>100 m</td><td>10 发 · 220 伤害 · 35m 溅射 · 投掷不破隐 · 飞行动画</td></tr>
                 <tr><td>反坦克手雷</td><td>100 m</td><td>5 发 · 450 伤害 · 高穿甲 · 投掷不破隐 · 飞行动画</td></tr>
                 <tr><td>狙击侦察小组</td><td>600 m / 400 m</td><td>视野+100m · 对步兵150 · 装甲车280 · 中坦60 · 重坦无效 · 一次灌木隐蔽</td></tr>
@@ -404,8 +413,8 @@
             </table>
           </div>
         </div>
-        <p class="tip">混战模式四档难度：普通为现有基准；困难 / 无限会提高敌方经验、火力与进攻欲望。混战无限难度没有胜利条件；简单难度无BOSS，普通在50000/90000黄圈经验各召唤一位BOSS，困难在50000召唤一位、90000红绿双方各一位，无限模式50000召唤一次后AI重生按时间概率召唤。背水一战每5波加入BOSS，第30波双BOSS，第50波起三BOSS；刷新时屏幕上方显示 BOSS 名称与比例血条，不显示具体数值。第 1 波即有低权重火炮，之后每 5 波略微提高火炮、防空车与重型坦克权重；击杀地狱轰炸机/超级重坦奖励 10000 经验/10000 分/6 张单位卡，幽灵兵团按步兵班分别结算，整组全灭再额外奖励。新增「制空盘旋」：3 架战斗机以直径 500m 盘旋 40 秒，地图显示制空圈与倒计时；敌机进入空域后追击到后方 100m；无对空目标时扫射地面步兵、装甲车和火炮。仅侦察机自带 200m 视野，侦察持续 20 秒。无限模式提供结算 / 存档 / 读档。AI 占领区域后会自动形成强化工事并随机布置 1~4 座工事武器，难度越高越容易放满；AI 步兵班阵亡时有 15% 概率掉落装备，玩家步兵班阵亡时有 15% 概率从已装备物品中掉落 1~2 件，步兵踩过可拾取，2 分 30 秒未拾取则消失。所有轰炸机投弹前都会显示红色落点圈、杀伤直径与到达倒计时。迫击炮优先瞄准软目标。</p>
-        <p class="tip">目标只要被己方任何单位看见，单位就能在射程内开火。所有武器都有散布，未命中显示 MISS。灌木丛 / 树林中的步兵或身穿伪装服的步兵，1 秒不开火即隐蔽，获得 25% 额外闪避，敌人逼近 50 米或步兵开火后暴露；侦察机可以照亮直径 500 米内的隐蔽单位。所有单位都能占领阵地，步兵享受全额加成，装甲单位约 65%；步兵在占领区额外 +28% 闪避，其他单位额外 +8% 减伤 / +8% 闪避，且不能隐蔽。击杀按目标类型给经验与分数（步兵 150、装甲车 200、中型坦克 250；1 级时一个击杀即可升级），空袭/炮火击杀同样记功，**驻守的占领区持续提供经验（3/秒/区），离开即停止，重新进入/再次占领后恢复**，全灭一队额外 +200 经验并触发 6 秒重生。黄圈争夺区同一落点持续 2.5 分钟，圈内净优势单位按 18 经验/单位/秒持续给经验，AI 会优先争夺；占领区也持续提供经验。防空车可以打飞机（对空 600 m），普通轰炸机 200 耐久 / 200m/s（玩家与 AI 共用）；侦察机 60% 闪避，被击落后侦察区消失；补给运输机 300 耐久 / 30% 闪避。伪装服步兵在灌木/树林停火1秒进入幽灵，无法被侦察并额外35%闪避；狙击小组视野+100m，可创建一次灌木。AI 会概率呼叫空袭。工兵装备可在已占领区构筑强化工事，也可 Shift+右键建造野战工事区；碉堡/迫击炮/反坦克炮/88防空炮阵地提供额外火力；选中火炮后 Shift + 右键可对该点压制 60 秒，火炮能逐层摧毁工事，工兵可缓慢修复。步兵满体力急行军约 300 米。开战前可在简报里切换三张 2km 地图、试验场或随机抽取。</p>
+        <p class="tip">混战模式四档难度：普通为现有基准；困难 / 无限会提高敌方经验、火力与进攻欲望。混战无限难度没有胜利条件；简单难度无BOSS，普通在50000/90000黄圈经验各召唤一位BOSS，困难在50000召唤一位、90000红绿双方各一位，无限模式50000召唤一次后AI重生按时间概率召唤。背水一战每5波加入BOSS，第30波双BOSS，第50波起三BOSS；刷新时屏幕上方显示 BOSS 名称与比例血条，不显示具体数值。第 1 波即有低权重火炮，之后每 5 波略微提高火炮、防空车与重型坦克权重；击杀地狱轰炸机/超级重坦奖励 10000 经验/10000 分/6 张单位卡，幽灵兵团按步兵班分别结算，整组全灭再额外奖励。新增「制空盘旋」：3 架战斗机以直径 500m 盘旋 40 秒，地图显示制空圈与倒计时；敌机进入空域后追击到后方 100m；无对空目标时扫射地面步兵、装甲车和火炮。仅侦察机自带 200m 视野，侦察持续 20 秒。无限模式提供结算 / 存档 / 读档。AI 只有装备工兵装备的步兵占领占领区，才会形成强化工事与武器；工事武器数量为简单1 / 普通2~3 / 困难4 / 无限按时间2、4、4（上限4）。AI 步兵装备上限：简单2 / 普通4 / 困难6，无限15分钟前2、15~30分钟4、30分钟后6。AI 步兵班阵亡时有 15% 概率掉落装备，玩家步兵班阵亡时有 15% 概率从已装备物品中掉落 1~2 件，步兵踩过可拾取，2 分 30 秒未拾取则消失。所有轰炸机投弹前都会显示红色落点圈、杀伤直径与到达倒计时。迫击炮优先瞄准软目标。</p>
+        <p class="tip">目标只要被己方任何单位看见，单位就能在射程内开火。所有武器都有散布，未命中显示 MISS。灌木丛 / 树林中的步兵或身穿伪装服的步兵，1 秒不开火即隐蔽，获得 25% 额外闪避，敌人逼近 50 米或步兵开火后暴露；侦察机可以照亮直径 500 米内的隐蔽单位。所有单位都能占领阵地，步兵享受全额加成，装甲单位约 65%；步兵在占领区额外 +28% 闪避，其他单位额外 +8% 减伤 / +8% 闪避，且不能隐蔽。击杀按目标类型给经验与分数（步兵 150、装甲车 200、中型坦克 250；1 级时一个击杀即可升级），空袭/炮火击杀同样记功，**驻守的占领区持续提供经验（3/秒/区），离开即停止，重新进入/再次占领后恢复**，全灭一队额外 +200 经验并触发 6 秒重生。黄圈争夺区同一落点持续 2.5 分钟，圈内净优势单位按 18 经验/单位/秒持续给经验，AI 会优先争夺；占领区也持续提供经验。防空车可以打飞机（对空 600 m），普通轰炸机 200 耐久 / 200m/s（玩家与 AI 共用）；侦察机 60% 闪避，被击落后侦察区消失；补给运输机 300 耐久 / 30% 闪避。伪装服步兵在灌木/树林停火1秒进入幽灵，无法被侦察并额外35%闪避；指挥车的持续侦察圈可以看见普通隐蔽步兵，但看不见幽灵状态。狙击小组视野+100m，可创建一次灌木。工程车可布设反步兵雷/反坦克雷/铁丝网/拒马；步兵不可跨越铁丝网，载具不可跨越拒马；载具可碾压铁丝网；每个障碍节点1500耐久，摧毁节点即断线；无路时可射击障碍拆除。AI 会概率呼叫空袭。工兵装备可在已占领区构筑强化工事，也可 Shift+右键建造野战工事区；碉堡/迫击炮/反坦克炮/88防空炮阵地提供额外火力；选中火炮后 Shift + 右键可对该点压制 60 秒，火炮能逐层摧毁工事，工兵可缓慢修复。步兵满体力急行军约 300 米。开战前可在简报里切换三张 2km 地图、试验场或随机抽取。</p>
       </div>
     </div>
   </div>

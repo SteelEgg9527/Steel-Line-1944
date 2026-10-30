@@ -66,6 +66,8 @@
     el.dStbar = $('d-stbar');
     el.dAmbar = $('d-ambar');
     el.dAmmo = $('d-ammo');
+    el.dAmmoRow = $('d-ammo-row');
+    el.dFireRow = $('d-fire-row');
     el.dReloadbar = $('d-reloadbar');
     el.dReload = $('d-reload');
     el.dReloadRow = $('d-reload-row');
@@ -84,6 +86,9 @@
     el.btnGrenade = $('btn-grenade');
     el.btnSniperHide = $('btn-sniper-hide');
     el.btnEngineer = $('btn-engineer');
+    el.engRow = $('engineer-row');
+    el.engValue = $('eng-value');
+    el.engModes = Array.prototype.slice.call(document.querySelectorAll('.eng-mode'));
     el.commandActions = document.querySelector('.command-actions');
     el.counts = { blue: $('count-blue'), red: $('count-red'), green: $('count-green') };
     el.scores = { blue: $('score-blue'), red: $('score-red'), green: $('score-green') };
@@ -192,6 +197,11 @@
     if (el.btnGrenade) el.btnGrenade.addEventListener('click', function () { UI.beginCommand('grenade'); });
     if (el.btnSniperHide) el.btnSniperHide.addEventListener('click', function () { UI.beginCommand('sniperHide'); });
     if (el.btnEngineer) el.btnEngineer.addEventListener('click', function () { UI.beginCommand('engineer'); });
+    el.engModes.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        UI.setEngineerMode(btn.dataset.eng);
+      });
+    });
     if (el.dhSettle) el.dhSettle.addEventListener('click', function () {
       if (game && game.settleDefense()) UI.pushToast('本局已结算', 'win');
     });
@@ -534,7 +544,7 @@
     var abbr = {
       infantry: '步', armored: '装', tank: '坦', heavy_tank: '重',
       at_gun: '反', aa: '防', artillery: '炮', heavy_arty: '炮',
-      rocket_arty: '火', command: '指'
+      rocket_arty: '火', command: '指', engineer_vehicle: '工'
     };
     list.forEach(function (u) {
       var row = document.createElement('div');
@@ -791,6 +801,17 @@
     UI.pushToast(next === 'auto' ? '手雷/火箭筒：自动攻击' : '手雷/火箭筒：手动攻击（按 G）', 'info');
   };
 
+  UI.setEngineerMode = function (mode) {
+    if (!game || !game.selected || !game.selected.length) return;
+    var n = game.setEngineerMode(game.selected, mode);
+    if (!n) return;
+    var active = game.selected.some(function (u) { return u.engineerMode === mode; });
+    UI.pushToast(active ? '工程模式：' + ({
+      mine_ap: '反步兵雷', mine_at: '反坦克雷', wire: '铁丝网', hedgehog: '拒马'
+    }[mode] || mode) + '（移动时布设）' : '工程模式已关闭', 'info');
+    updateBars();
+  };
+
   UI.update = function (g, dt) {
     game = g;
     if (el.rangeTools) {
@@ -1045,7 +1066,7 @@
   }
 
   function buildItems(u) {
-    var glyph = { infantry: '步', armored: '装', tank: '坦', artillery: '炮', heavy_arty: '重炮', heavy_tank: '重坦', aa: '防', at_gun: '反' }[u.type] || '?';
+    var glyph = { infantry: '步', armored: '装', tank: '坦', artillery: '炮', heavy_arty: '重炮', heavy_tank: '重坦', aa: '防', at_gun: '反', command: '指', engineer_vehicle: '工' }[u.type] || '?';
     var defs = [
       { g: glyph, label: u.def.weapon.label, n: '' },
       { g: '弹', label: '弹药 ' + u.ammoMax + ' 发', n: String(u.ammoMax) }
@@ -1094,7 +1115,7 @@
 
   function unitReloadInfo(u) {
     var w = u && u.def && u.def.weapon;
-    if (!w || !w.interval || u.type === 'command' || u.type === 'target') return null;
+    if (!w || !w.interval || u.type === 'command' || u.type === 'engineer_vehicle' || u.type === 'target') return null;
     var max = w.rockets ? w.reload : ((w.mag && u.magLeft <= 0) ? w.reload : w.interval);
     if (!max) return null;
     var left = Math.max(0, u.cd || 0);
@@ -1122,6 +1143,10 @@
     el.dHp.textContent = Math.ceil(u.hp) + ' / ' + u.maxHp;
     el.dHpbar.style.width = (hpR * 100).toFixed(0) + '%';
     el.dHpbar.style.background = hpR > 0.6 ? '#7fd4a0' : (hpR > 0.3 ? '#e5c46a' : '#e06a52');
+
+    var noWeapon = u.type === 'command' || u.type === 'engineer_vehicle';
+    if (el.dAmmoRow) el.dAmmoRow.style.display = noWeapon ? 'none' : '';
+    if (el.dFireRow) el.dFireRow.style.display = noWeapon ? 'none' : '';
 
     var stR = U.clamp(u.stamina / 100, 0, 1);
     el.dStbar.style.width = (stR * 100).toFixed(0) + '%';
@@ -1151,6 +1176,16 @@
     var canSniperHide = u.type === 'infantry' && u.items.some(function (it) {
       return it.key === 'sniper' && (it.uses === undefined || it.uses > 0);
     });
+    var isEngineerVehicle = u.type === 'engineer_vehicle';
+    if (el.engRow) {
+      el.engRow.style.display = isEngineerVehicle ? '' : 'none';
+      if (isEngineerVehicle) {
+        if (el.engValue) el.engValue.textContent = Math.round(u.engineerValue) + ' / ' + u.engineerMax;
+        el.engModes.forEach(function (btn) {
+          btn.classList.toggle('on', u.engineerMode === btn.dataset.eng);
+        });
+      }
+    }
     if (el.commandActions) el.commandActions.classList.toggle('show',
       canSupport || canEngineer || canRecon || canGrenade || canSniperHide);
     if (el.btnFireSupport) el.btnFireSupport.style.display = canSupport ? '' : 'none';
@@ -1164,7 +1199,8 @@
     }
 
     var bonus = Math.round((u.cover.rangeBonus || 0) * 100);
-    el.dRange.textContent = Math.round(u.maxRangeNow || u.rangeNow) + ' m' + (bonus > 1 ? ' +' + bonus + '%' : '');
+    el.dRange.textContent = u.type === 'engineer_vehicle' ? '—' :
+      (Math.round(u.maxRangeNow || u.rangeNow) + ' m' + (bonus > 1 ? ' +' + bonus + '%' : ''));
     var cv = coverText(u);
     if (u.concealed) cv += ' · 隐蔽';
     el.dCover.textContent = cv;

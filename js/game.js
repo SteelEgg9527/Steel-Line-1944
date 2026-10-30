@@ -5,6 +5,35 @@
   var G = (SL.Game = {});
   var nextId = 1;
 
+  function cross(ax, ay, bx, by) { return ax * by - ay * bx; }
+
+  function segmentsIntersect(x0, y0, x1, y1, x2, y2, x3, y3) {
+    var d1 = cross(x3 - x2, y3 - y2, x0 - x2, y0 - y2);
+    var d2 = cross(x3 - x2, y3 - y2, x1 - x2, y1 - y2);
+    var d3 = cross(x1 - x0, y1 - y0, x2 - x0, y2 - y0);
+    var d4 = cross(x1 - x0, y1 - y0, x3 - x0, y3 - y0);
+    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+      ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+  }
+
+  function segmentIntersectsRect(x0, y0, x1, y1, rx0, ry0, rx1, ry1) {
+    // Liang-Barsky 裁剪：包含贴边、端点在边上的情况
+    var dx = x1 - x0, dy = y1 - y0;
+    var t0 = 0, t1 = 1;
+    var p = [-dx, dx, -dy, dy];
+    var q = [x0 - rx0, rx1 - x0, y0 - ry0, ry1 - y0];
+    for (var i = 0; i < 4; i++) {
+      if (p[i] === 0) {
+        if (q[i] < 0) return false;
+      } else {
+        var r = q[i] / p[i];
+        if (p[i] < 0) { if (r > t1) return false; if (r > t0) t0 = r; }
+        else { if (r < t0) return false; if (r < t1) t1 = r; }
+      }
+    }
+    return t0 <= t1;
+  }
+
   function Game(opts) {
     opts = opts || {};
     this.units = [];
@@ -44,6 +73,10 @@
     this.recons = [];       // 侦察机视野
     this.planes = [];       // 飞机
     this.drops = [];        // 战场掉落的步兵装备
+    this.mines = [];        // 工程车布设的地雷
+    this.barriers = [];     // 铁丝网 / 拒马节点
+    this.barrierVersion = 0;
+    this.barrierGridCache = {};
     this.drafts = [];       // 升级后的抽卡选择（蓝队）
     this.stats = { kills: { blue: 0, red: 0, green: 0 }, losses: { blue: 0, red: 0, green: 0 }, wipes: 0 };
     this.teams = {};
@@ -615,6 +648,8 @@
       }),
       supplies: this.supplies,
       drops: this.drops,
+      mines: this.mines,
+      barriers: this.barriers,
       recons: [],
       planes: this.planes,
       units: this.units.filter(function (u) { return u.alive; }).map(function (u) {
@@ -625,6 +660,8 @@
           cd: u.cd, stamina: u.stamina, fireMode: u.fireMode,
           grenadeMode: u.grenadeMode, kills: u.kills, score: u.score, items: u.items,
           deployState: u.deployState, deployTimer: u.deployTimer,
+          engineerMode: u.engineerMode, engineerValue: u.engineerValue,
+          engineerMax: u.engineerMax, engLastX: u.engLastX, engLastY: u.engLastY,
           bossKind: u.bossKind, ghostPhase: u.ghostPhase,
           forceConcealed: u.forceConcealed, bossPhase: u.bossPhase,
           bossTarget: u.bossTarget, bossMainCd: u.bossMainCd,
@@ -667,6 +704,10 @@
     });
     this.supplies = data.supplies || [];
     this.drops = data.drops || [];
+    this.mines = data.mines || [];
+    this.barriers = data.barriers || [];
+    this.barrierVersion++;
+    this.barrierGridCache = {};
     this.recons = data.recons || [];
     this.planes = data.planes || [];
     (data.units || []).forEach(function (su) {
@@ -675,6 +716,12 @@
       u.maxHp = su.maxHp; u.hp = su.hp;
       u.items = su.items || [];
       u.target = null; u.order = null; u.selected = false;
+      if (u.type === 'engineer_vehicle') {
+        u.engineerMode = su.engineerMode || null;
+        u.engineerValue = su.engineerValue === undefined ? u.engineerMax : su.engineerValue;
+        u.engLastX = su.engLastX === undefined ? u.x : su.engLastX;
+        u.engLastY = su.engLastY === undefined ? u.y : su.engLastY;
+      }
     });
     this.computeFog();
     this.log('已读取无尽防线存档', 'win');
@@ -800,6 +847,35 @@
   Game.prototype.aiUnitCap = function () {
     if (this.mode !== 'melee') return 20;
     return (SL.AI_UNIT_CAP && SL.AI_UNIT_CAP[this.difficulty]) || 20;
+  };
+
+  // 无限难度按时间分档：15 分钟前 2 件、15~30 分钟 4 件、30 分钟后 6 件
+  Game.prototype.endlessStage = function () {
+    var t = SL.AI_EQUIP_TIME || { early: 900, mid: 1800 };
+    if (this.time < t.early) return 'early';
+    if (this.time < t.mid) return 'mid';
+    return 'late';
+  };
+
+  Game.prototype.aiEquipCap = function () {
+    var cap = SL.AI_EQUIP_MAX || { easy: 2, normal: 4, hard: 6 };
+    if (this.difficulty === 'easy') return cap.easy;
+    if (this.difficulty === 'normal') return cap.normal;
+    if (this.difficulty === 'hard') return cap.hard;
+    var stage = this.endlessStage();
+    return stage === 'early' ? cap.endlessEarly : (stage === 'mid' ? cap.endlessMid : cap.endlessLate);
+  };
+
+  Game.prototype.aiFortWeaponCap = function () {
+    var cap = SL.AI_FORT.weaponCap || { easy: 1, normalMin: 2, normalMax: 3, hard: 4 };
+    if (this.difficulty === 'easy') return cap.easy;
+    if (this.difficulty === 'hard') return cap.hard;
+    if (this.difficulty === 'normal') {
+      return cap.normalMin + (Math.random() < 0.5 ? 0 : 1);
+    }
+    var stage = this.endlessStage();
+    return Math.min(SL.FORT.maxStructures,
+      stage === 'early' ? cap.endlessEarly : (stage === 'mid' ? cap.endlessMid : cap.endlessLate));
   };
 
   // 按连队等级生成重生编制：玩家固定基础连队，AI 规模更大
@@ -991,6 +1067,11 @@
       idle: 0,
       deployState: SL.ARTILLERY[typeKey] ? 'deployed' : 'none',
       deployTimer: 0,
+      engineerMode: null,
+      engineerValue: typeKey === 'engineer_vehicle' ? SL.ENGINEER.maxValue : 0,
+      engineerMax: typeKey === 'engineer_vehicle' ? SL.ENGINEER.maxValue : 0,
+      engLastX: x, engLastY: y,
+      engLastNode: null,
       rangeNow: def.range,
       maxRangeNow: def.range,
       cover: { zone: null, forest: 0, dr: 0, evade: 0, rangeBonus: 0, height: 0 }
@@ -1002,8 +1083,10 @@
 
   Game.prototype.rollAIEquipment = function (u) {
     var chance = (SL.AI_EQUIP && SL.AI_EQUIP[this.difficulty]) || 0.45;
+    var cap = this.aiEquipCap();
     var count = 0;
     for (var i = 0; i < 6; i++) if (Math.random() < chance) count++;
+    count = Math.min(count, cap);
     if (!count) return;
     var keys = SL.EQUIP_KEYS.slice();
     for (var j = keys.length - 1; j > 0; j--) {
@@ -1143,8 +1226,7 @@
   /* 编队移动：围绕目标点排开 */
   Game.prototype.commandMove = function (units, x, y, sprint) {
     if (!units.length) return;
-    var cols = Math.ceil(Math.sqrt(units.length));
-    var gap = 26;
+    var cols = Math.ceil(Math.sqrt(units.length));    var gap = 26;
     var count = units.length;
     var anySprint = false;
     var ms = SL.CONFIG.mapSize;
@@ -1171,6 +1253,8 @@
       if (canRun) anySprint = true;
       units[i].order = { kind: 'move', x: tx, y: ty, sprint: !!canRun, speedCap: speedCap };
       units[i].target = null;
+      units[i].path = null;
+      units[i].noPath = false;
     }
     if (sprint && !anySprint) this.log('体力不足，无法急行军', 'order');
     else this.log((anySprint ? '急行军' : '移动') + '指令 · ' + units.length + ' 个单位', 'order');
@@ -1187,6 +1271,8 @@
     for (var i = 0; i < units.length; i++) {
       units[i].order = { kind: 'attack', target: target, speedCap: speedCap };
       units[i].target = target;
+      units[i].path = null;
+      units[i].noPath = false;
     }
     this.log('攻击指令 · ' + target.name, 'order');
   };
@@ -1252,21 +1338,24 @@
     u.cover.evade = Math.min(CB.coverEvadeCap, ev);
     u.cover.height = h;
     u.cover.rangeBonus = U.clamp((h - CB.elevationBase) / CB.elevationSpan, 0, CB.elevationRangeBonus);
-    u.rangeNow = u.def.range * (1 + u.cover.rangeBonus);
-    var maxR = u.def.range;
+    var bonus = 1 + u.cover.rangeBonus;
+    u.rangeNow = u.def.range * bonus;
+    var maxR = u.def.range * bonus;
     for (var k = 0; k < u.items.length; k++) {
       var ew = SL.EQUIP[u.items[k].key].weapon;
-      if (ew && ew.range > maxR) maxR = ew.range;
+      if (!ew) continue;
+      var effective = ew.noRangeBonus ? ew.range : ew.range * bonus;
+      if (effective > maxR) maxR = effective;
     }
     // 强化工事里的机枪碉堡/迫击炮阵地提供额外射程
     if (z && z.owner === u.side && u.type === 'infantry') {
       var zrStructs = this.zoneStructures(z);
       for (var zr = 0; zr < zrStructs.length; zr++) {
-        if (zrStructs[zr].type === 'bunker') maxR = Math.max(maxR, SL.FORT.bunkerRange);
-        if (zrStructs[zr].type === 'mortar') maxR = Math.max(maxR, SL.FORT.mortarRange);
+        if (zrStructs[zr].type === 'bunker') maxR = Math.max(maxR, SL.FORT.bunkerRange * bonus);
+        if (zrStructs[zr].type === 'mortar') maxR = Math.max(maxR, SL.FORT.mortarRange * bonus);
       }
     }
-    u.maxRangeNow = maxR * (1 + u.cover.rangeBonus);
+    u.maxRangeNow = maxR;
   };
 
   /* ---------------- 占领 ---------------- */
@@ -1460,6 +1549,12 @@
   Game.prototype.autoFortifyAI = function (z, side) {
     if (!z || !SL.SIDES[side] || !SL.SIDES[side].ai) return 0;
     if (z.kind === 'bush' || z.kind === 'forest') return 0;
+    // 只有装备了工兵装备的步兵占领该区，AI 才会形成强化工事与武器
+    if (!this.zoneEngineer(z, side)) {
+      z.aiFortifyEligible = false;
+      return 0;
+    }
+    z.aiFortifyEligible = true;
     z.fortified = true;
     z.hp = z.maxHp;
     z.fortifyProgress = 0;
@@ -1467,12 +1562,7 @@
     z.structure = null;
     z.rubbles = [];
     z.rubble = null;
-    var chance = (SL.AI_FORT.fillChance[this.difficulty] !== undefined)
-      ? SL.AI_FORT.fillChance[this.difficulty] : 0.45;
-    var count = 1;
-    for (var i = 1; i < SL.FORT.maxStructures; i++) {
-      if (Math.random() < chance) count++;
-    }
+    var count = Math.min(SL.FORT.maxStructures, this.aiFortWeaponCap());
     for (var k = 0; k < count; k++) {
       var key = SL.AI_FORT.types[Math.floor(Math.random() * SL.AI_FORT.types.length)];
       var info = this.fortCardInfo(key);
@@ -1484,12 +1574,13 @@
       });
     }
     z.structure = z.structures[0] || null;
-    this.log(SL.SIDES[side].name + ' 在 ' + z.name + ' 自动构筑工事（' + z.structures.length + ' 座）', 'loss');
+    this.log(SL.SIDES[side].name + ' 工兵在 ' + z.name + ' 自动构筑工事（' + z.structures.length + ' 座）', 'loss');
     return z.structures.length;
   };
 
   Game.prototype.clearFortification = function (z) {
     z.fortified = false;
+    z.aiFortifyEligible = false;
     z.hp = 0;
     z.fortifyProgress = 0;
     z.structure = null;
@@ -1528,6 +1619,8 @@
         if (z.fortified) this.clearFortification(z);
         continue;
       }
+      // AI 只有工兵占领的区才允许后续构筑/修复
+      if (SL.SIDES[z.owner] && SL.SIDES[z.owner].ai && !z.aiFortifyEligible) continue;
       var eng = this.zoneEngineer(z, z.owner);
       var structs = this.zoneStructures(z);
       if (!z.rubbles) z.rubbles = [];
@@ -1949,8 +2042,9 @@
       this.updateUnit(u, dt);
     }
     this.updateRocketQueues(dt);
-    this.resolveSeparation();
-    this.updateShells(dt);
+     this.resolveSeparation();
++    this.updateMines(dt);
+     this.updateShells(dt);
     this.updateBombs(dt);
     this.updateEffects(dt);
     this.updateStrikes(dt);
@@ -2099,6 +2193,32 @@
 
     var suppressing = !!(u.order && u.order.kind === 'suppress');
 
+    // 被障碍阻挡后转为拆除障碍
+    if (u.order && u.order.kind === 'attackBarrier') {
+      var bar = u.order.target;
+      if (!bar || !bar.alive) {
+        var resume = u.order.resume;
+        u.order = resume ? { kind: 'move', x: resume.x, y: resume.y, speedCap: 0 } : null;
+        u.target = null;
+        u.path = null;
+      } else {
+        var bd = U.dist(u.x, u.y, bar.x, bar.y);
+        var bRange = Math.max(20, u.maxRangeNow || u.def.range || 20);
+        u.engaging = bd <= bRange;
+        u.target = bar;
+        if (bd > bRange * 0.9) {
+          this.moveToward(u, bar.x, bar.y, dt);
+        } else {
+          u.moving = false;
+          var ba = U.angle(u.x, u.y, bar.x, bar.y);
+          u.turret = U.lerpAngle(u.turret, ba, Math.min(1, dt * 2.6));
+          u.facing = U.lerpAngle(u.facing, ba, Math.min(1, dt * 3));
+          if ((u.fireMode || 'free') !== 'hold' && u.cd <= 0) this.tryFire(u, bd);
+        }
+        return;
+      }
+    }
+
     var locked = (u.order && u.order.kind === 'attack' && u.order.target && u.order.target.alive)
       ? u.order.target : null;
 
@@ -2112,7 +2232,7 @@
       var fm = u.fireMode || 'free';
       if (fm === 'hold') {
         u.target = null;
-      } else if (locked && this.unitVisibleTo(u.side, locked)) {
+      } else if (locked && (locked.isBarrier || this.unitVisibleTo(u.side, locked))) {
         u.target = locked;
       } else if (fm === 'return') {
         var attacker = u.lastAttacker;
@@ -2130,7 +2250,7 @@
     if (u.target) {
       var td = U.dist(u.x, u.y, u.target.x, u.target.y);
       var limit = (u.target === locked) ? Math.max(def.vision, u.maxRangeNow) : u.maxRangeNow * 1.05;
-      if (!u.target.alive || !this.unitVisibleTo(u.side, u.target) || td > limit) {
+      if (!u.target.alive || (!u.target.isBarrier && !this.unitVisibleTo(u.side, u.target)) || td > limit) {
         u.target = null;
       }
     }
@@ -2167,7 +2287,7 @@
           u.order = null;
         } else {
           var dd = U.dist(u.x, u.y, tg.x, tg.y);
-          if (dd > u.maxRangeNow * 0.9 && this.unitVisibleTo(u.side, tg)) {
+          if (dd > u.maxRangeNow * 0.9 && (tg.isBarrier || this.unitVisibleTo(u.side, tg))) {
             this.moveToward(u, tg.x, tg.y, dt);
           }
         }
@@ -2237,12 +2357,72 @@
       }
     }
 
+    // 工程车：行驶中按当前模式布设障碍
+    this.updateEngineerVehicle(u);
+
+    // 所有通往目标的路线都被障碍封死时，转为拆除敌方障碍
+    if (u.noPath) {
+      var resumeOrder = u.order;
+      var rx = u.noPathX, ry = u.noPathY;
+      u.noPath = false;
+      if (resumeOrder && resumeOrder.kind !== 'attackBarrier' && this.tryBreakBarrier(u, rx, ry)) {
+        u.order.resume = resumeOrder;
+      }
+    }
+
     var ms = SL.CONFIG.mapSize;
     u.x = U.clamp(u.x, 8, ms - 8);
     u.y = U.clamp(u.y, 8, ms - 8);
   };
 
   Game.prototype.moveToward = function (u, tx, ty, dt) {
+    u.noPath = false;
+    // 有绕行路径时沿路径点行进
+    if (u.path && u.path.length) {
+      if (!u.pathGoal || U.dist(u.pathGoal.x, u.pathGoal.y, tx, ty) > 6) {
+        u.path = null;
+      } else {
+        var wp = u.path[0];
+        if (U.dist(u.x, u.y, wp.x, wp.y) < 4) {
+          u.path.shift();
+          if (!u.path.length) { u.path = null; return; }
+          wp = u.path[0];
+        }
+        this.moveTowardDirect(u, wp.x, wp.y, dt);
+        return;
+      }
+    }
+    var dx = tx - u.x, dy = ty - u.y;
+    var d = U.len(dx, dy);
+    if (d < 0.001) return;
+    var speed = u.def.speed * T.speedAt(u.x, u.y, u.type);
+    if (u.engaging) speed *= 0.55;
+    if (u.sprinting) speed *= CB.sprintMul;
+    if (u.order && u.order.speedCap > 0) speed = Math.min(speed, u.order.speedCap);
+    var step = Math.min(d, speed * dt);
+    var nx = u.x + dx / d * step, ny = u.y + dy / d * step;
+    // 载具可碾压铁丝网；先处理碾压，再判断是否仍被拒马阻挡
+    if (this.isVehicleUnit(u)) this.crushWireOnSegment(u, u.x, u.y, nx, ny);
+    if (this.segmentBlocked(u, u.x, u.y, nx, ny)) {
+      if (!u.pathCooldown || this.time >= u.pathCooldown) {
+        u.pathCooldown = this.time + 1.2;
+        var path = this.findPath(u, tx, ty);
+        if (path && path.length) {
+          u.path = path;
+          u.pathGoal = { x: tx, y: ty };
+          var first = u.path[0];
+          this.moveTowardDirect(u, first.x, first.y, dt);
+          return;
+        }
+      }
+      u.noPath = true;
+      u.noPathX = tx; u.noPathY = ty;
+      return;
+    }
+    this.moveTowardDirect(u, tx, ty, dt);
+  };
+
+  Game.prototype.moveTowardDirect = function (u, tx, ty, dt) {
     var dx = tx - u.x, dy = ty - u.y;
     var d = U.len(dx, dy);
     if (d < 0.001) return;
@@ -2269,6 +2449,362 @@
     u.facing = U.lerpAngle(u.facing, Math.atan2(dy, dx), Math.min(1, dt * 5));
     u.moving = true;
   };
+
+  /* ---------------- 工程车 / 障碍 ---------------- */
+
+  Game.prototype.isVehicleUnit = function (u) {
+    return !!u && u.type !== 'infantry' && u.type !== 'target' &&
+      u.type !== 'armor_target' && u.type !== 'heavy_target';
+  };
+
+  Game.prototype.barrierById = function (id) {
+    for (var i = 0; i < this.barriers.length; i++) {
+      if (this.barriers[i].id === id) return this.barriers[i];
+    }
+    return null;
+  };
+
+  Game.prototype.barrierSegments = function () {
+    var out = [];
+    for (var i = 0; i < this.barriers.length; i++) {
+      var a = this.barriers[i];
+      if (!a.alive) continue;
+      for (var k = 0; k < a.links.length; k++) {
+        var b = this.barrierById(a.links[k]);
+        if (!b || !b.alive || b.id < a.id) continue;
+        out.push({ a: a, b: b, type: a.type });
+      }
+    }
+    return out;
+  };
+
+  Game.prototype.barrierBlocksUnit = function (u, type) {
+    if (u.type === 'infantry' && type === 'wire') return true;
+    if (this.isVehicleUnit(u) && type === 'hedgehog') return true;
+    return false;
+  };
+
+  Game.prototype.segmentBlocked = function (u, x0, y0, x1, y1) {
+    var segs = this.barrierSegments();
+    for (var i = 0; i < segs.length; i++) {
+      if (!this.barrierBlocksUnit(u, segs[i].type)) continue;
+      if (segmentsIntersect(x0, y0, x1, y1, segs[i].a.x, segs[i].a.y, segs[i].b.x, segs[i].b.y)) return true;
+    }
+    return false;
+  };
+
+  Game.prototype.crushWireOnSegment = function (u, x0, y0, x1, y1) {
+    var segs = this.barrierSegments();
+    var hit = [];
+    for (var i = 0; i < segs.length; i++) {
+      if (segs[i].type !== 'wire') continue;
+      if (segmentsIntersect(x0, y0, x1, y1, segs[i].a.x, segs[i].a.y, segs[i].b.x, segs[i].b.y)) {
+        hit.push(segs[i].a, segs[i].b);
+      }
+    }
+    for (var k = 0; k < hit.length; k++) {
+      if (hit[k].alive) this.destroyBarrier(hit[k], u, true);
+    }
+  };
+
+  Game.prototype.destroyBarrier = function (node, source, crushed) {
+    if (!node || !node.alive) return;
+    node.alive = false;
+    node.hp = 0;
+    node.links = [];
+    this.barrierVersion++;
+    this.fxText(node.x, node.y - 8, crushed ? '铁丝网被碾断' : '障碍被摧毁', '#e8c47a');
+    if (source && source.side === 'blue') this.log('摧毁 ' + (node.type === 'wire' ? '铁丝网' : '拒马'), 'order');
+  };
+
+  Game.prototype.hitBarrier = function (node, amount, source) {
+    if (!node || !node.alive) return;
+    node.hp -= amount;
+    node.hitFlash = 0.16;
+    this.fxText(node.x + (Math.random() - 0.5) * 8, node.y - 8,
+      '-' + Math.max(1, Math.round(amount)), '#ffe08a');
+    if (node.hp <= 0) this.destroyBarrier(node, source, false);
+  };
+
+  Game.prototype.damageBarrierFromArea = function (x, y, radius, dmg, source) {
+    for (var i = 0; i < this.barriers.length; i++) {
+      var b = this.barriers[i];
+      if (!b.alive) continue;
+      var d = U.dist(x, y, b.x, b.y);
+      if (d > radius) continue;
+      this.hitBarrier(b, dmg * (1 - 0.65 * (d / Math.max(1, radius))), source);
+    }
+  };
+
+  Game.prototype.layBarrier = function (u, type) {
+    if (this.barriers.length >= 240) return null;
+    var node = {
+      id: nextId++, isBarrier: true, type: type, x: u.x, y: u.y, side: u.side,
+      hp: SL.ENGINEER.nodeHp, maxHp: SL.ENGINEER.nodeHp, alive: true,
+      links: [], hitFlash: 0, name: type === 'wire' ? '铁丝网' : '拒马',
+      def: { armor: 0 }, cover: { dr: 0, evade: 0 }
+    };
+    var prev = u.engLastNode ? this.barrierById(u.engLastNode) : null;
+    if (prev && prev.alive && prev.side === u.side && prev.type === type &&
+      U.dist(prev.x, prev.y, node.x, node.y) <= SL.ENGINEER.connectRange) {
+      node.links.push(prev.id);
+      prev.links.push(node.id);
+    }
+    u.engLastNode = node.id;
+    this.barriers.push(node);
+    this.barrierVersion++;
+    return node;
+  };
+
+  Game.prototype.layMine = function (u, type) {
+    if (this.mines.length >= 260) return null;
+    var mine = {
+      id: nextId++, type: type, x: u.x, y: u.y, side: u.side, alive: true,
+      trigger: SL.ENGINEER.mineTrigger,
+      radius: SL.ENGINEER.mineSplash[type] || 34,
+      damage: SL.ENGINEER.mineDamage[type] || 190,
+      armT: this.time + 1.5
+    };
+    this.mines.push(mine);
+    return mine;
+  };
+
+  Game.prototype.setEngineerMode = function (units, mode) {
+    var changed = 0;
+    for (var i = 0; i < units.length; i++) {
+      var u = units[i];
+      if (!u.alive || u.type !== 'engineer_vehicle') continue;
+      u.engineerMode = (u.engineerMode === mode) ? null : mode;
+      u.engLastX = u.x; u.engLastY = u.y;
+      u.engLastNode = null;
+      changed++;
+    }
+    return changed;
+  };
+
+  Game.prototype.updateEngineerVehicle = function (u) {
+    if (!u.alive || u.type !== 'engineer_vehicle') return;
+    var mode = u.engineerMode;
+    if (!mode) { u.engLastX = u.x; u.engLastY = u.y; return; }
+    var gap = SL.ENGINEER.layGap[mode] || 20;
+    var cost = SL.ENGINEER.cost[mode] || 10;
+    if (U.dist(u.x, u.y, u.engLastX, u.engLastY) < gap) return;
+    u.engLastX = u.x; u.engLastY = u.y;
+    if (u.engineerValue < cost) return;
+    var made = null;
+    if (mode === 'wire' || mode === 'hedgehog') made = this.layBarrier(u, mode);
+    else made = this.layMine(u, mode);
+    if (!made) return;
+    u.engineerValue = Math.max(0, u.engineerValue - cost);
+    this.fxText(u.x, u.y - 14,
+      mode === 'wire' ? '布设铁丝网' : (mode === 'hedgehog' ? '布设拒马' : '布设地雷'),
+      '#e8c47a', u.side);
+  };
+
+  Game.prototype.updateMines = function (dt) {
+    for (var i = this.mines.length - 1; i >= 0; i--) {
+      var m = this.mines[i];
+      if (!m.alive) { this.mines.splice(i, 1); continue; }
+      if (this.time < m.armT) continue;
+      var victim = null;
+      for (var k = 0; k < this.units.length; k++) {
+        var u = this.units[k];
+        if (!u.alive || u.side === m.side || u.side === 'neutral') continue;
+        if (U.dist(u.x, u.y, m.x, m.y) > m.trigger) continue;
+        var isInf = u.type === 'infantry';
+        if (m.type === 'mine_ap' && !isInf) continue;
+        if (m.type === 'mine_at' && isInf) continue;
+        victim = u; break;
+      }
+      if (!victim) continue;
+      m.alive = false;
+      this.effects.push({ kind: 'explosion', x: m.x, y: m.y, t: 0, dur: 0.5, size: m.radius, side: m.side });
+      if (SL.Audio) SL.Audio.explosion(m.radius, m.x, m.y);
+      for (var q = 0; q < this.units.length; q++) {
+        var e = this.units[q];
+        if (!e.alive || e.side === m.side || e.side === 'neutral') continue;
+        var ed = U.dist(e.x, e.y, m.x, m.y);
+        if (ed > m.radius) continue;
+        var mul = 1 - 0.65 * (ed / Math.max(1, m.radius));
+        this.damage(e, m.damage * mul, { side: m.side, name: '地雷', kills: 0, score: 0 }, 1.5, true);
+      }
+      this.mines.splice(i, 1);
+    }
+  };
+
+  Game.prototype.barrierGridFor = function (u) {
+    var key = this.isVehicleUnit(u) ? 'vehicle' : 'infantry';
+    var cached = this.barrierGridCache[key];
+    if (cached && cached.version === this.barrierVersion) return cached;
+    var cell = 40, n = Math.ceil(SL.CONFIG.mapSize / cell);
+    var blocked = new Uint8Array(n * n);
+    var segs = this.barrierSegments();
+    for (var i = 0; i < segs.length; i++) {
+      var s = segs[i];
+      if (!this.barrierBlocksUnit(u, s.type)) continue;
+      var minX = Math.max(0, Math.floor(Math.min(s.a.x, s.b.x) / cell) - 1);
+      var maxX = Math.min(n - 1, Math.floor(Math.max(s.a.x, s.b.x) / cell) + 1);
+      var minY = Math.max(0, Math.floor(Math.min(s.a.y, s.b.y) / cell) - 1);
+      var maxY = Math.min(n - 1, Math.floor(Math.max(s.a.y, s.b.y) / cell) + 1);
+      for (var gy = minY; gy <= maxY; gy++) {
+        for (var gx = minX; gx <= maxX; gx++) {
+          if (segmentIntersectsRect(s.a.x, s.a.y, s.b.x, s.b.y,
+            gx * cell, gy * cell, (gx + 1) * cell, (gy + 1) * cell)) {
+            blocked[gy * n + gx] = 1;
+          }
+        }
+      }
+    }
+    cached = { version: this.barrierVersion, cell: cell, n: n, blocked: blocked };
+    this.barrierGridCache[key] = cached;
+    return cached;
+  };
+
+  Game.prototype.findPath = function (u, tx, ty) {
+    if (!this.barriers.length) return null;
+    if (!this.segmentBlocked(u, u.x, u.y, tx, ty)) return [];
+    var grid = this.barrierGridFor(u);
+    var cell = grid.cell, n = grid.n, blocked = grid.blocked;
+    var sx = U.clamp(Math.floor(u.x / cell), 0, n - 1);
+    var sy = U.clamp(Math.floor(u.y / cell), 0, n - 1);
+    var gx = U.clamp(Math.floor(tx / cell), 0, n - 1);
+    var gy = U.clamp(Math.floor(ty / cell), 0, n - 1);
+    if (blocked[gy * n + gx]) {
+      var found = false;
+      for (var rr = 1; rr <= 5 && !found; rr++) {
+        for (var oy = -rr; oy <= rr && !found; oy++) {
+          for (var ox = -rr; ox <= rr; ox++) {
+            var cx = gx + ox, cy = gy + oy;
+            if (cx < 0 || cy < 0 || cx >= n || cy >= n) continue;
+            if (!blocked[cy * n + cx]) { gx = cx; gy = cy; found = true; break; }
+          }
+        }
+      }
+      if (!found) return null;
+    }
+    var start = sy * n + sx, goal = gy * n + gx;
+    if (start === goal) return [{ x: tx, y: ty }];
+    var total = n * n;
+    var gScore = new Float32Array(total); gScore.fill(Infinity);
+    var fScore = new Float32Array(total); fScore.fill(Infinity);
+    var came = new Int32Array(total); came.fill(-1);
+    var closed = new Uint8Array(total);
+    var open = [start];
+    gScore[start] = 0;
+    fScore[start] = Math.hypot(sx - gx, sy - gy);
+    var foundPath = false;
+    var guard = 0;
+    while (open.length && guard++ < 12000) {
+      open.sort(function (a, b) { return fScore[b] - fScore[a]; });
+      var cur = open.pop();
+      if (cur === goal) { foundPath = true; break; }
+      if (closed[cur]) continue;
+      closed[cur] = 1;
+      var cx0 = cur % n, cy0 = Math.floor(cur / n);
+      for (var dy = -1; dy <= 1; dy++) {
+        for (var dx2 = -1; dx2 <= 1; dx2++) {
+          if (!dx2 && !dy) continue;
+          var nx2 = cx0 + dx2, ny2 = cy0 + dy;
+          if (nx2 < 0 || ny2 < 0 || nx2 >= n || ny2 >= n) continue;
+          var ni = ny2 * n + nx2;
+          if (blocked[ni] || closed[ni]) continue;
+          if (dx2 && dy && (blocked[cy0 * n + nx2] || blocked[ny2 * n + cx0])) continue;
+          var ng = gScore[cur] + (dx2 && dy ? 1.4142 : 1);
+          if (ng >= gScore[ni]) continue;
+          came[ni] = cur;
+          gScore[ni] = ng;
+          fScore[ni] = ng + Math.hypot(nx2 - gx, ny2 - gy);
+          open.push(ni);
+        }
+      }
+    }
+    if (!foundPath) return null;
+    var cells = [];
+    for (var at = goal; at !== -1 && at !== start; at = came[at]) cells.push(at);
+    cells.reverse();
+    var points = [];
+    for (var ci = 0; ci < cells.length; ci++) {
+      points.push({
+        x: (cells[ci] % n + 0.5) * cell,
+        y: (Math.floor(cells[ci] / n) + 0.5) * cell
+      });
+    }
+    points.push({ x: tx, y: ty });
+    // 拉直路径，减少网格锯齿
+    var out = [], anchorX = u.x, anchorY = u.y;
+    var idx = 0;
+    while (idx < points.length) {
+      var far = idx;
+      for (var j = points.length - 1; j >= idx; j--) {
+        if (!this.segmentBlocked(u, anchorX, anchorY, points[j].x, points[j].y)) { far = j; break; }
+      }
+      var p = points[far];
+      out.push(p);
+      anchorX = p.x; anchorY = p.y;
+      idx = far + 1;
+    }
+    return out.length ? out : null;
+  };
+
+  Game.prototype.findBlockingBarrier = function (u, tx, ty) {
+    var segs = this.barrierSegments();
+    var best = null, bestD = Infinity;
+    for (var i = 0; i < segs.length; i++) {
+      var s = segs[i];
+      if (s.a.side === u.side) continue;
+      if (!this.barrierBlocksUnit(u, s.type)) continue;
+      if (!segmentsIntersect(u.x, u.y, tx, ty, s.a.x, s.a.y, s.b.x, s.b.y)) continue;
+      var da = U.dist(u.x, u.y, s.a.x, s.a.y);
+      if (da < bestD) { bestD = da; best = s.a; }
+      var db = U.dist(u.x, u.y, s.b.x, s.b.y);
+      if (db < bestD) { bestD = db; best = s.b; }
+    }
+    // 没有正好压在直线上的线段时，选附近最近的敌方障碍，供无路时拆除
+    if (!best) {
+      for (var k = 0; k < this.barriers.length; k++) {
+        var b = this.barriers[k];
+        if (!b.alive || b.side === u.side) continue;
+        if (!this.barrierBlocksUnit(u, b.type)) continue;
+        var d = U.dist(u.x, u.y, b.x, b.y);
+        if (d < 260 && d < bestD) { bestD = d; best = b; }
+      }
+    }
+    return best;
+  };
+
+  Game.prototype.tryBreakBarrier = function (u, tx, ty) {
+    var node = this.findBlockingBarrier(u, tx, ty);
+    if (!node || !node.alive) return false;
+    u.order = { kind: 'attackBarrier', target: node, resume: { x: tx, y: ty } };
+    u.target = node;
+    u.path = null;
+    u.noPath = false;
+    this.log(u.name + ' 前进道路被阻，转为拆除 ' + node.name, 'order');
+    return true;
+  };
+
+  Game.prototype.commandAttackBarrier = function (units, node) {
+    for (var i = 0; i < units.length; i++) {
+      if (!units[i].alive) continue;
+      units[i].order = { kind: 'attackBarrier', target: node };
+      units[i].target = node;
+      units[i].path = null;
+    }
+    if (node) this.log('攻击指令 · ' + node.name, 'order');
+  };
+
+  Game.prototype.barrierAt = function (x, y, maxDist) {
+    var best = null, bestD = maxDist || 24;
+    for (var i = 0; i < this.barriers.length; i++) {
+      var b = this.barriers[i];
+      if (!b.alive) continue;
+      if (!this.isSeen(b.x, b.y)) continue;
+      var d = U.dist(x, y, b.x, b.y);
+      if (d < bestD) { best = b; bestD = d; }
+    }
+    return best;
+  };
+
 
   Game.prototype.resolveSeparation = function () {
     for (var i = 0; i < this.units.length; i++) {
@@ -2383,8 +2919,8 @@
         this.finishStealth(u, wasActive);
         continue;
       }
-      // 反坦克炮：原地 5 秒不开炮进入隐蔽，移动/开火立即解除
-      if (u.type === 'at_gun') {
+      // 反坦克炮 / 指挥车：原地 5 秒不开炮进入隐蔽，移动/开火立即解除
+      if (u.type === 'at_gun' || u.type === 'command') {
         var stationary = !u.moving && !u.sprinting;
         var justFired = (this.time - u.lastFire) < 0.2;
         var safe = !this.enemyWithin(u, SL.AT_STEALTH.revealRange || 50);
@@ -2472,6 +3008,7 @@
       var eq = SL.EQUIP[it.key];
       if (!eq || !eq.weapon) continue;
       var w = eq.weapon;
+      var itemBonus = w.noRangeBonus ? 1 : bonus;
       if (it.cd > 0) continue;
       if ((it.key === 'grenade' || it.key === 'atgrenade' || it.key === 'bazooka') &&
         (u.grenadeMode || 'auto') === 'manual') continue;
@@ -2483,7 +3020,7 @@
         if (target.type === 'heavy_tank') continue;
         if (d > (w.antiArmorRange || 400)) continue;
       }
-      if (d > w.range * bonus || d < (w.minRange || 0)) continue;
+      if (d > w.range * itemBonus || d < (w.minRange || 0)) continue;
       var prio = 1;
       // 反坦克手雷：只要目标有装甲，优先于机枪、火箭筒和其他投掷物
       if (it.key === 'atgrenade' && target.def.armor) prio = 9;
@@ -2737,6 +3274,10 @@
 
   Game.prototype.damage = function (target, amount, source, ap, bypassArmorImmunity) {
     if (!target.alive) return;
+    if (target.isBarrier) {
+      this.hitBarrier(target, amount, source);
+      return;
+    }
     // 重型坦克免疫步兵 / 装甲车 / 防空车的低穿甲火力；迫击炮直击可绕过此限制
     if (!bypassArmorImmunity && target.type === 'heavy_tank' && source &&
       (source.type === 'infantry' || source.type === 'armored' || source.type === 'aa') &&
@@ -3858,6 +4399,15 @@
           var u = this.units[k];
           if (!u.alive || u.side !== s.side) continue;
           if (U.dist(u.x, u.y, s.x, s.y) > s.r) continue;
+          // 工程车在补给点消耗弹药补充工程值
+          if (u.type === 'engineer_vehicle' && u.engineerValue < u.engineerMax && s.ammo > 0) {
+            var engAdd = Math.min(SL.ENGINEER.refillRate * 0.5,
+              u.engineerMax - u.engineerValue, s.ammo / Math.max(1, SL.ENGINEER.refillAmmoCost));
+            if (engAdd > 0) {
+              u.engineerValue += engAdd;
+              s.ammo -= engAdd * (SL.ENGINEER.refillAmmoCost || 1);
+            }
+          }
           if (u.ammo >= u.ammoMax) continue;
           var add = Math.min(SL.SUPPLY.ammoRate, u.ammoMax - u.ammo, s.ammo);
           u.ammo += add;
@@ -4056,6 +4606,7 @@
     }
     // 迫击炮没有攻坚能力；其他炮弹直击工事造成 200 点伤害
     if (!s.mortar) this.damageFortifications(s.x1, s.y1, 200, s.radius);
+    this.damageBarrierFromArea(s.x1, s.y1, s.radius, s.mortar ? 90 : 240, s.source);
     this.damageSupplies(s.x1, s.y1, s.dmg, s.radius);
   };
 
@@ -4074,6 +4625,7 @@
         this.damage(u, b.dmg * fall, b.source, 9);
       }
       this.damageFortifications(b.x, b.y, 250, b.radius);
+      this.damageBarrierFromArea(b.x, b.y, b.radius, 260, b.source);
       this.damageSupplies(b.x, b.y, 300, b.radius);
       this.effects.push({ kind: 'explosion', x: b.x, y: b.y, t: 0, dur: 1.1, size: 80, side: b.side });
       this.effects.push({ kind: 'blast', x: b.x, y: b.y, t: 0, dur: 1.1, r: b.radius, side: b.side });
@@ -4195,6 +4747,9 @@
   };
 
   Game.prototype.aiUnit = function (u) {
+    // 正在拆除障碍时不要被下一次 AI 决策覆盖
+    if (u.order && u.order.kind === 'attackBarrier' &&
+      u.order.target && u.order.target.alive) return;
     var aggro = this.mode === 'melee' ? this.meleeMods().aggro : 1;
     var enemy = this.nearestSpottedEnemy(u, Math.max(u.maxRangeNow || u.def.range, u.def.vision) * aggro);
     if (enemy) {

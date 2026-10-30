@@ -246,6 +246,23 @@
         ammo: 0, kind: 'direct', label: '无武装'
       }
     },
+    engineer_vehicle: {
+      key: 'engineer_vehicle',
+      name: '工程车',
+      short: '工程',
+      symbol: 'armored',
+      hp: 220,
+      armor: 1,
+      vision: 240,
+      range: 0,
+      speed: 10,
+      radius: 10,
+      canSprint: false,
+      weapon: {
+        dmg: 0, interval: 1, ap: 0, accuracy: 0, spread: 0,
+        ammo: 0, kind: 'direct', label: '无武装 · 工程作业'
+      }
+    },
     target: {
       key: 'target',
       name: '标靶',
@@ -484,6 +501,8 @@
   };
   SL.AT_STEALTH = { delay: 5, revealRange: 50 };
   SL.AI_EQUIP = { easy: 0.20, normal: 0.45, hard: 0.70, endless: 0.90 };
+  SL.AI_EQUIP_MAX = { easy: 2, normal: 4, hard: 6, endlessEarly: 2, endlessMid: 4, endlessLate: 6 };
+  SL.AI_EQUIP_TIME = { early: 900, mid: 1800 };
 
   /* ---------------- 强化工事 ---------------- */
   SL.FORT = {
@@ -545,8 +564,8 @@
     },
     bazooka: {
       key: 'bazooka', name: '火箭筒', icon: 'BZ', slot: 'weapon',
-      desc: 'Panzerschreck，3 发，对装甲高额杀伤，射程 250m；火箭弹需飞行时间',
-      weapon: { range: 250, dmg: 400, interval: 5, ap: 1.9, accuracy: 0.9, spread: 2, ammo: 3, kind: 'direct', antiArmor: true, rocket: true, projectileSpeed: 55, label: 'Panzerschreck' }
+      desc: 'Panzerschreck，3 发，对装甲高额杀伤，射程 200m；散布较大，不吃高地射程加成',
+      weapon: { range: 200, dmg: 400, interval: 5, ap: 1.9, accuracy: 0.9, spread: 8, noRangeBonus: true, ammo: 3, kind: 'direct', antiArmor: true, rocket: true, projectileSpeed: 55, label: 'Panzerschreck' }
     },
     atgrenade: {
       key: 'atgrenade', name: '反坦克手雷', icon: '雷', slot: 'weapon',
@@ -587,8 +606,24 @@
   };
   SL.AI_FORT = {
     fillChance: { easy: 0.25, normal: 0.45, hard: 0.65, endless: 0.8 },
+    weaponCap: { easy: 1, normalMin: 2, normalMax: 3, hard: 4, endlessEarly: 2, endlessMid: 4, endlessLate: 6 },
     types: ['bunker', 'mortar_nest', 'at_gun_nest', 'flak88']
   };
+  /* 工程车：工程值、布设间距、消耗与障碍血量 */
+  SL.ENGINEER = {
+    maxValue: 200,
+    refillRate: 30,
+    refillAmmoCost: 1,
+    layGap: { mine_ap: 18, mine_at: 18, wire: 28, hedgehog: 28 },
+    cost: { mine_ap: 8, mine_at: 14, wire: 12, hedgehog: 12 },
+    connectRange: 52,
+    nodeHp: 1500,
+    mineTrigger: 16,
+    mineSplash: { mine_ap: 34, mine_at: 48 },
+    mineDamage: { mine_ap: 190, mine_at: 520 },
+    crushWireDamage: 1500
+  };
+
   SL.DROP = { chance: 0.15, expire: 150, radius: 12, max: 24 };
 
   SL.EQUIP_KEYS = ['mg', 'mortar', 'bazooka', 'atgrenade', 'grenade', 'sniper', 'camo', 'medkit', 'engineer'];
@@ -626,6 +661,7 @@
     { key: 'at_gun', w: 12 },
     { key: 'rocket_arty', w: 5 },
     { key: 'command', w: 6 },
+    { key: 'engineer_vehicle', w: 8 },
     { key: 'tank', w: 12 },
     { key: 'heavy_tank', w: 10 },
     { key: 'artillery', w: 7 },
@@ -802,7 +838,7 @@
   SL.TYPE_LABEL = {
     infantry: '步兵', armored: '装甲车', tank: '中型坦克', artillery: '火炮',
     heavy_arty: '重型火炮', heavy_tank: '重型坦克', aa: '防空车',
-    at_gun: '反坦克炮', rocket_arty: '自行火箭炮', command: '指挥车',
+    at_gun: '反坦克炮', rocket_arty: '自行火箭炮', command: '指挥车', engineer_vehicle: '工程车',
     boss_super: '超级重坦', boss_ghost: '幽灵步兵', target: '标靶', armor_target: '装甲标靶', heavy_target: '重坦标靶'
   };
 

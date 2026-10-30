@@ -238,6 +238,7 @@
       drawWrecks(game);
       drawFog(game);
       drawPaths(game);
+      drawObstacles(game);
     });
     stage('fortRanges', function () {
       drawFortRanges(game);
@@ -761,7 +762,8 @@
     var acc = S.light;
 
     // 炮管（先画，压在车身下面）
-    if (u.type !== 'infantry' && u.type !== 'target' && u.type !== 'command' && u.type !== 'rocket_arty') {
+    if (u.type !== 'infantry' && u.type !== 'target' && u.type !== 'command' &&
+      u.type !== 'rocket_arty' && u.type !== 'engineer_vehicle') {
       var len = (u.type === 'artillery' || u.type === 'heavy_arty') ? w * 0.95
         : (u.type === 'at_gun' ? w * 0.82
         : ((u.type === 'tank' || u.type === 'heavy_tank') ? w * 0.78
@@ -866,6 +868,21 @@
       ctx.beginPath();
       ctx.arc(sx - w * 0.14, sy + h * 0.13, h * 0.2, 0, Math.PI * 2);
       ctx.stroke();
+    } else if (u.type === 'engineer_vehicle') {
+      // 工程车：扳手 / 工程臂
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 1.7;
+      ctx.beginPath();
+      ctx.moveTo(sx - w * 0.22, sy - h * 0.12);
+      ctx.lineTo(sx + w * 0.22, sy + h * 0.14);
+      ctx.moveTo(sx - w * 0.22, sy + h * 0.14);
+      ctx.lineTo(sx + w * 0.22, sy - h * 0.12);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,235,180,0.95)';
+      ctx.beginPath();
+      ctx.arc(sx - w * 0.23, sy - h * 0.13, h * 0.1, 0, Math.PI * 2);
+      ctx.arc(sx + w * 0.23, sy + h * 0.15, h * 0.1, 0, Math.PI * 2);
+      ctx.fill();
     } else if (u.type === 'tank' || u.type === 'heavy_tank' || u.type === 'boss_super') {
       ctx.strokeStyle = 'rgba(255,255,255,0.7)';
       ctx.lineWidth = 1.5;
@@ -1073,7 +1090,7 @@
         ctx.textBaseline = 'middle';
         ctx.fillText(stText, sx, sty + sth / 2 + 0.5);
         ctx.restore();
-      } else if (u.type === 'at_gun' && u.atStealthT > 0) {
+      } else if ((u.type === 'at_gun' || u.type === 'command') && u.atStealthT > 0) {
         var atLeft = Math.max(0, (SL.AT_STEALTH.delay || 5) - u.atStealthT);
         var atText = '隐蔽倒计时 ' + atLeft.toFixed(1) + 's';
         ctx.font = '800 9px ' + SL.FONT_MONO;
@@ -1316,6 +1333,84 @@
       }
     }
     ctx.restore();
+  }
+
+  /* ---------------- 障碍与地雷 ---------------- */
+
+  function drawObstacles(game) {
+    var i, s, a, b;
+    var segs = game.barrierSegments ? game.barrierSegments() : [];
+    for (i = 0; i < segs.length; i++) {
+      s = segs[i];
+      if (!game.isSeen(s.a.x, s.a.y) && !game.isSeen(s.b.x, s.b.y)) continue;
+      var x1 = proj.x(s.a.x), y1 = proj.y(s.a.y);
+      var x2 = proj.x(s.b.x), y2 = proj.y(s.b.y);
+      ctx.save();
+      if (s.type === 'wire') {
+        ctx.strokeStyle = 'rgba(198,190,158,0.82)';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        var mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.strokeStyle = 'rgba(150,145,120,0.8)';
+        ctx.lineWidth = 1;
+        for (var t = 0.12; t < 0.95; t += 0.18) {
+          var px = x1 + (x2 - x1) * t, py = y1 + (y2 - y1) * t;
+          ctx.beginPath();
+          ctx.moveTo(px - Math.sin(ang) * 4, py + Math.cos(ang) * 4);
+          ctx.lineTo(px + Math.sin(ang) * 4, py - Math.cos(ang) * 4);
+          ctx.stroke();
+        }
+      } else {
+        ctx.strokeStyle = 'rgba(132,97,58,0.9)';
+        ctx.lineWidth = 2.8;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.strokeStyle = 'rgba(74,55,35,0.9)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(x1 - 5, y1 + 5); ctx.lineTo(x2 + 5, y2 - 5); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x1 + 5, y1 + 5); ctx.lineTo(x2 - 5, y2 - 5); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    for (i = 0; i < game.barriers.length; i++) {
+      a = game.barriers[i];
+      if (!a.alive || !game.isSeen(a.x, a.y)) continue;
+      var nx = proj.x(a.x), ny = proj.y(a.y);
+      ctx.save();
+      ctx.fillStyle = a.type === 'wire' ? '#b9b39a' : '#8a6a42';
+      ctx.strokeStyle = '#181812';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      if (a.type === 'wire') {
+        ctx.arc(nx, ny, 3.2, 0, Math.PI * 2);
+      } else {
+        ctx.rect(nx - 4, ny - 4, 8, 8);
+      }
+      ctx.fill(); ctx.stroke();
+      if (a.hp < a.maxHp) {
+        var hw = 26;
+        ctx.fillStyle = 'rgba(10,12,9,0.8)';
+        ctx.fillRect(nx - hw / 2, ny - 13, hw, 3);
+        ctx.fillStyle = a.hp / a.maxHp > 0.5 ? '#d8b25e' : '#d06a52';
+        ctx.fillRect(nx - hw / 2, ny - 13, hw * U.clamp(a.hp / a.maxHp, 0, 1), 3);
+      }
+      ctx.restore();
+    }
+    for (i = 0; i < game.mines.length; i++) {
+      var m = game.mines[i];
+      if (!m.alive || (!game.isSeen(m.x, m.y) && m.side !== 'blue')) continue;
+      var mx2 = proj.x(m.x), my2 = proj.y(m.y);
+      ctx.save();
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = m.type === 'mine_at' ? '#b46a4e' : '#9c9a7a';
+      ctx.beginPath();
+      ctx.arc(mx2, my2, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(245,222,160,0.55)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(mx2, my2, 4.2, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
   }
 
   /* ---------------- 残骸 ---------------- */
