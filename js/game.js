@@ -1611,6 +1611,18 @@
     return false;
   };
 
+  // 区域内可修理残骸的工程车（必须有工程值）
+  Game.prototype.zoneEngineerVehicle = function (z, side) {
+    for (var i = 0; i < this.units.length; i++) {
+      var u = this.units[i];
+      if (!u.alive || u.side !== side || u.type !== 'engineer_vehicle') continue;
+      if (u.engineerValue <= 0) continue;
+      if (U.dist2(u.x, u.y, z.x, z.y) > z.r * z.r) continue;
+      return u;
+    }
+    return null;
+  };
+
   Game.prototype.updateFortifications = function (dt) {
     for (var i = 0; i < T.zones.length; i++) {
       var z = T.zones[i];
@@ -1622,13 +1634,31 @@
       // AI 只有工兵占领的区才允许后续构筑/修复
       if (SL.SIDES[z.owner] && SL.SIDES[z.owner].ai && !z.aiFortifyEligible) continue;
       var eng = this.zoneEngineer(z, z.owner);
+      var engVeh = this.zoneEngineerVehicle(z, z.owner);
       var structs = this.zoneStructures(z);
       if (!z.rubbles) z.rubbles = [];
       if (z.rubble && z.rubbles.indexOf(z.rubble) < 0) z.rubbles.push(z.rubble);
       if (z.rubbles.length) {
         z.rubble = z.rubbles[0];
+        var repairPower = 0;
+        var repairCost = 0;
         if (eng) {
-          z.rubbleProgress = Math.min(1, (z.rubbleProgress || 0) + dt / SL.FORT.rebuildTime);
+          repairPower = 1;
+        } else if (engVeh) {
+          repairPower = SL.ENGINEER.rubbleRepairSpeed || 2;
+          repairCost = SL.ENGINEER.rubbleRepairCost || 18;
+        }
+        if (repairPower > 0) {
+          var power = repairPower;
+          if (!eng && engVeh && repairCost > 0) {
+            var need = repairCost * dt;
+            if (engVeh.engineerValue < need) {
+              power *= Math.max(0, engVeh.engineerValue / Math.max(0.0001, need));
+              need = engVeh.engineerValue;
+            }
+            engVeh.engineerValue = Math.max(0, engVeh.engineerValue - need);
+          }
+          z.rubbleProgress = Math.min(1, (z.rubbleProgress || 0) + dt / SL.FORT.rebuildTime * power);
           if (z.rubbleProgress >= 1) {
             var rb = z.rubbles.shift();
             if (rb.type === 'zone') {
@@ -1646,7 +1676,7 @@
               z.structures.push(restored);
               z.structure = z.structures[0];
             }
-            this.log(SL.SIDES[z.owner].name + ' 工兵修复了 ' + z.name + ' 的工事', 'order');
+            this.log(SL.SIDES[z.owner].name + ' ' + (eng ? '工兵' : '工程车') + '修复了 ' + z.name + ' 的工事', 'order');
             if (SL.Audio) SL.Audio.repair(z.x, z.y);
             z.rubble = z.rubbles[0] || null;
             z.rubbleProgress = 0;

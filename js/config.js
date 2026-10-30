@@ -616,6 +616,8 @@
     refillRate: 30,
     refillAmmoCost: 1,
     modeSpeedMul: 0.8,
+    rubbleRepairSpeed: 2,
+    rubbleRepairCost: 18,
     layGap: { mine_ap: 18, mine_at: 18, wire: 28, hedgehog: 28 },
     cost: { mine_ap: 8, mine_at: 14, wire: 12, hedgehog: 12 },
     connectRange: 52,

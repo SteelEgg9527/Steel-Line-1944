@@ -985,6 +985,24 @@
       ctx.restore();
     }
 
+    // 工程车：工程值进度条直接画在车身上
+    if (u.type === 'engineer_vehicle') {
+      var evMax = Math.max(1, u.engineerMax || SL.ENGINEER.maxValue || 200);
+      var evr = U.clamp((u.engineerValue || 0) / evMax, 0, 1);
+      var evw = w * 0.8;
+      var evx = sx - evw / 2;
+      var evy = sy + h / 2 - 4.5;
+      ctx.save();
+      ctx.fillStyle = 'rgba(8,18,16,0.9)';
+      ctx.fillRect(evx, evy, evw, 3);
+      ctx.fillStyle = evr < 0.2 ? '#d07a58' : '#6fd0c8';
+      ctx.fillRect(evx, evy, evw * evr, 3);
+      ctx.strokeStyle = 'rgba(8,12,10,0.7)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(evx, evy, evw, 3);
+      ctx.restore();
+    }
+
     // 血条
     var hpw = w * 1.05;
     var hpr = u.hp / u.maxHp;
