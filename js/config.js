@@ -584,7 +584,7 @@
       weapon: {
         range: 600, dmg: 150, interval: 4.5, ap: 0.5, accuracy: 0.9, spread: 1,
         ammo: 0, kind: 'direct', usesUnitAmmo: true, sniper: true,
-        antiArmorRange: 400, armoredDmg: 280, tankDmg: 60, heavyDmg: 0,
+        antiArmorRange: 400, armoredDmg: 180, tankDmg: 35, heavyDmg: 0,
         label: '狙击步枪 / 反坦克步枪'
       },
       uses: 1
@@ -630,13 +630,11 @@
 
   SL.DROP = { chance: 0.15, expire: 150, radius: 12, max: 24 };
 
-  SL.EQUIP_KEYS = ['mg', 'mortar', 'bazooka', 'atgrenade', 'grenade', 'sniper', 'camo', 'medkit', 'engineer'];
+  SL.EQUIP_KEYS = ['mg', 'mortar', 'bazooka', 'sniper', 'camo', 'medkit', 'engineer'];
   SL.EQUIP_PACK = [
     { key: 'mg', w: 14 },
     { key: 'mortar', w: 14 },
     { key: 'bazooka', w: 14 },
-    { key: 'atgrenade', w: 12 },
-    { key: 'grenade', w: 12 },
     { key: 'sniper', w: 10 },
     { key: 'camo', w: 14 },
     { key: 'medkit', w: 14 },

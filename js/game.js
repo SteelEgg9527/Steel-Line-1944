@@ -1076,6 +1076,17 @@
       maxRangeNow: def.range,
       cover: { zone: null, forest: 0, dr: 0, evade: 0, rangeBonus: 0, height: 0 }
     };
+    // 手榴弹 / 反坦克手雷不再占装备包，每个步兵班自带
+    if (typeKey === 'infantry') {
+      u.items.push({
+        key: 'grenade', ammo: SL.EQUIP.grenade.weapon.ammo,
+        hp: 0, uses: 0, cd: 0, innate: true
+      });
+      u.items.push({
+        key: 'atgrenade', ammo: SL.EQUIP.atgrenade.weapon.ammo,
+        hp: 0, uses: 0, cd: 0, innate: true
+      });
+    }
     this.units.push(u);
     if ((side === 'red' || side === 'green') && typeKey === 'infantry') this.rollAIEquipment(u);
     return u;
@@ -1084,6 +1095,9 @@
   Game.prototype.rollAIEquipment = function (u) {
     var chance = (SL.AI_EQUIP && SL.AI_EQUIP[this.difficulty]) || 0.45;
     var cap = this.aiEquipCap();
+    var innate = 0;
+    for (var n = 0; n < u.items.length; n++) if (u.items[n].innate) innate++;
+    cap = Math.max(0, cap - innate);
     var count = 0;
     for (var i = 0; i < 6; i++) if (Math.random() < chance) count++;
     count = Math.min(count, cap);
@@ -3238,7 +3252,11 @@
       stealthEvade = target.stealthLingerEvade || SL.STEALTH.concealEvade || 0;
     }
     var targetEvade = (target.cover ? target.cover.evade : 0) + stealthEvade;
-    acc *= (1 - U.clamp(targetEvade, 0, 0.9));
+    // 闪避随距离变化：远距离吃满闪避，近距离效果降低
+    var evadeRange = Math.max(1, w.range || u.def.range || 1);
+    var evadeDistance = U.clamp(shotDist / evadeRange, 0, 1);
+    var evadeScale = 0.2 + 0.8 * evadeDistance;
+    acc *= (1 - U.clamp(targetEvade * evadeScale, 0, 0.9));
 
     var muzzleSize = u.type === 'infantry' ? 5 : 9;
     this.effects.push({ kind: 'muzzle', x: u.x, y: u.y, a: a, t: 0, dur: 0.1, size: muzzleSize, side: u.side });
@@ -3461,12 +3479,14 @@
       if (this.wrecks.length > 30) this.wrecks.shift();
     } else if ((u.side === 'red' || u.side === 'green') && Math.random() < SL.DROP.chance) {
       this.dropEquipment(u.x, u.y);
-    } else if (u.side === 'blue' && u.items.length && Math.random() < SL.DROP.chance) {
-      var loot = u.items.slice();
-      var lootCount = Math.min(loot.length, 1 + (Math.random() < 0.5 ? 1 : 0));
-      for (var di = 0; di < lootCount; di++) {
-        var li = Math.floor(Math.random() * loot.length);
-        this.dropItem(u.x, u.y, loot.splice(li, 1)[0]);
+    } else if (u.side === 'blue' && Math.random() < SL.DROP.chance) {
+      var loot = u.items.filter(function (it) { return !it.innate; });
+      if (loot.length) {
+        var lootCount = Math.min(loot.length, 1 + (Math.random() < 0.5 ? 1 : 0));
+        for (var di = 0; di < lootCount; di++) {
+          var li = Math.floor(Math.random() * loot.length);
+          this.dropItem(u.x, u.y, loot.splice(li, 1)[0]);
+        }
       }
     }
     this.log(u.name + ' 被击毁', 'info');

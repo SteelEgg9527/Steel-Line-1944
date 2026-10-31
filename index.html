@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>钢线 1944 · 1944 西欧战场</title>
 <link rel="icon" type="image/png" href="favicon.png">
-<link rel="stylesheet" href="css/style.css?v=0.8.7">
+<link rel="stylesheet" href="css/style.css?v=0.8.8">
 </head>
 <body>
 <div id="app">
@@ -401,9 +401,7 @@
                 <tr><td>机枪（MG42）</td><td>180 m</td><td>使用步兵班弹药</td></tr>
                 <tr><td>迫击炮（8cm）</td><td>300 m</td><td>使用步兵班弹药 · 散布 65m · 溅射 60m · 停止后才开火 · 直击可伤害装甲</td></tr>
                 <tr><td>火箭筒（Panzerschreck）</td><td>200 m</td><td>3 发 · 400 伤害 · 慢速火箭弹 · 高散布 · 不吃射程加成</td></tr>
-                <tr><td>手榴弹</td><td>100 m</td><td>10 发 · 220 伤害 · 35m 溅射 · 投掷不破隐 · 飞行动画</td></tr>
-                <tr><td>反坦克手雷</td><td>100 m</td><td>5 发 · 450 伤害 · 高穿甲 · 投掷不破隐 · 飞行动画</td></tr>
-                <tr><td>狙击侦察小组</td><td>600 m / 400 m</td><td>视野+100m · 对步兵150 · 装甲车280 · 中坦60 · 重坦无效 · 一次灌木隐蔽</td></tr>
+                <tr><td>狙击侦察小组</td><td>600 m / 400 m</td><td>视野+100m · 对步兵150 · 装甲车180 · 中坦35 · 重坦无效 · 一次灌木隐蔽</td></tr>
                 <tr><td>伪装服</td><td>—</td><td>灌木/树林停火1秒进入幽灵：无法被侦察，额外35%闪避；普通隐蔽额外25%</td></tr>
                 <tr><td>装甲标靶</td><td>—</td><td>试验场 400 HP / 装甲1 / 参考中型坦克</td></tr>
                 <tr><td>重坦标靶</td><td>—</td><td>试验场敌方 520 HP / 装甲2 / 参考重型坦克 / 静止</td></tr>
@@ -411,6 +409,7 @@
                 <tr><td>工兵装备</td><td>—</td><td>强化工事 / Shift+右键野战工事</td></tr>
               </tbody>
             </table>
+            <p class="tip">每个步兵班自带：手榴弹 10 发、反坦克手雷 5 发，不再占用装备包；闪避效果随射击距离变化，远距离吃满，近距离降低。</p>
           </div>
         </div>
         <p class="tip">混战模式四档难度：普通为现有基准；困难 / 无限会提高敌方经验、火力与进攻欲望。混战无限难度没有胜利条件；简单难度无BOSS，普通在50000/90000黄圈经验各召唤一位BOSS，困难在50000召唤一位、90000红绿双方各一位，无限模式50000召唤一次后AI重生按时间概率召唤。背水一战每5波加入BOSS，第30波双BOSS，第50波起三BOSS；刷新时屏幕上方显示 BOSS 名称与比例血条，不显示具体数值。第 1 波即有低权重火炮，之后每 5 波略微提高火炮、防空车与重型坦克权重；击杀地狱轰炸机/超级重坦奖励 10000 经验/10000 分/6 张单位卡，幽灵兵团按步兵班分别结算，整组全灭再额外奖励。新增「制空盘旋」：3 架战斗机以直径 500m 盘旋 40 秒，地图显示制空圈与倒计时；敌机进入空域后追击到后方 100m；无对空目标时扫射地面步兵、装甲车和火炮。仅侦察机自带 200m 视野，侦察持续 20 秒。无限模式提供结算 / 存档 / 读档。AI 只有装备工兵装备的步兵占领占领区，才会形成强化工事与武器；工事武器数量为简单1 / 普通2~3 / 困难4 / 无限按时间2、4、4（上限4）。AI 步兵装备上限：简单2 / 普通4 / 困难6，无限15分钟前2、15~30分钟4、30分钟后6。AI 步兵班阵亡时有 15% 概率掉落装备，玩家步兵班阵亡时有 15% 概率从已装备物品中掉落 1~2 件，步兵踩过可拾取，2 分 30 秒未拾取则消失。所有轰炸机投弹前都会显示红色落点圈、杀伤直径与到达倒计时。迫击炮优先瞄准软目标。</p>
@@ -478,14 +477,14 @@
   <div id="context-lost" class="hidden">显卡渲染上下文丢失 · 正在恢复…</div>
 </div>
 
-<script src="js/util.js?v=0.8.7"></script>
-<script src="js/config.js?v=0.8.7"></script>
-<script src="js/audio.js?v=0.8.7"></script>
-<script src="js/maps.js?v=0.8.7"></script>
-<script src="js/terrain.js?v=0.8.7"></script>
-<script src="js/game.js?v=0.8.7"></script>
-<script src="js/render.js?v=0.8.7"></script>
-<script src="js/ui.js?v=0.8.7"></script>
-<script src="js/main.js?v=0.8.7"></script>
+<script src="js/util.js?v=0.8.8"></script>
+<script src="js/config.js?v=0.8.8"></script>
+<script src="js/audio.js?v=0.8.8"></script>
+<script src="js/maps.js?v=0.8.8"></script>
+<script src="js/terrain.js?v=0.8.8"></script>
+<script src="js/game.js?v=0.8.8"></script>
+<script src="js/render.js?v=0.8.8"></script>
+<script src="js/ui.js?v=0.8.8"></script>
+<script src="js/main.js?v=0.8.8"></script>
 </body>
 </html>
