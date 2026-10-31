@@ -566,7 +566,7 @@
     bazooka: {
       key: 'bazooka', name: '火箭筒', icon: 'BZ', slot: 'weapon',
       desc: 'Panzerschreck，3 发，对装甲高额杀伤，射程 200m；散布较大，不吃高地射程加成',
-      weapon: { range: 200, dmg: 400, interval: 5, ap: 1.9, accuracy: 0.9, spread: 8, noRangeBonus: true, ammo: 3, kind: 'direct', antiArmor: true, rocket: true, projectileSpeed: 55, label: 'Panzerschreck' }
+      weapon: { range: 200, dmg: 300, interval: 5, ap: 1.9, accuracy: 0.9, spread: 8, noRangeBonus: true, ammo: 3, kind: 'direct', antiArmor: true, rocket: true, projectileSpeed: 55, label: 'Panzerschreck' }
     },
     atgrenade: {
       key: 'atgrenade', name: '反坦克手雷', icon: '雷', slot: 'weapon',
