@@ -527,6 +527,16 @@
     }
   };
 
+  Game.prototype.updateBossGhostAttack = function (u) {
+    this.updateCover(u);
+    var target = this.findTarget(u);
+    if (!target) { u.target = null; return; }
+    u.target = target;
+    var d = U.dist(u.x, u.y, target.x, target.y);
+    if (d > u.maxRangeNow) return;
+    if (u.cd <= 0) this.tryFire(u, d);
+  };
+
   Game.prototype.updateBossGhost = function (u, dt) {
     var y = this.yellow;
     var gcfg = SL.BOSS.ghost;
@@ -572,6 +582,8 @@
       return;
     }
     if (u.ghostPhase === 'approach') {
+      // 隐蔽接近黄圈时也会攻击，但弹道不会破除强制隐身
+      this.updateBossGhostAttack(u);
       if (U.dist(u.x, u.y, y.x, y.y) > (gcfg.revealRadius || 30)) this.moveToward(u, y.x, y.y, dt);
       else {
         u.ghostPhase = 'spread';
@@ -2917,14 +2929,24 @@
     return false;
   };
 
+  // 指挥车的持续侦察区：可以看见幽灵兵团的强制隐身
+  Game.prototype.commandReconSees = function (side, x, y) {
+    for (var i = 0; i < this.recons.length; i++) {
+      var r = this.recons[i];
+      if (!r.command || r.side !== side || this.time >= r.until) continue;
+      if (U.dist2(r.x, r.y, x, y) <= r.r * r.r) return true;
+    }
+    return false;
+  };
+
   // 单位是否对某阵营可见（隐蔽中的步兵只能被侦察机或 50m 内的敌人发现）
   Game.prototype.unitVisibleTo = function (side, u) {
     if (!u || !u.alive) return false;
     if (u.side === side) return true;
     // 试验场中幽灵兵团始终可见，便于测试
     if (this.testMode && u.bossKind === 'ghost') return true;
-    // 幽灵兵团在抵达黄圈中心前强制隐身，连侦察也无法发现
-    if (u.forceConcealed) return false;
+    // 幽灵兵团在抵达黄圈中心前强制隐身；仅指挥车持续侦察圈可以观测
+    if (u.forceConcealed) return this.commandReconSees(side, u.x, u.y);
     // 伪装服步兵进入幽灵状态后，任何侦察手段都无法发现
     if (u.ghost) return false;
     // 试验场关闭迷雾时全图可见，标靶放到远处也会出现在小地图
@@ -3159,7 +3181,7 @@
     var silentThrow = !!(item && (item.key === 'grenade' || item.key === 'atgrenade'));
     if (!silentThrow) {
       u.lastFire = this.time;
-      u.concealed = false;
+      if (!u.forceConcealed) u.concealed = false;
     }
 
     var a = U.angle(u.x, u.y, target.x, target.y);
